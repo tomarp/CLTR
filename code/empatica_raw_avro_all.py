@@ -1,19 +1,4 @@
 #!/usr/bin/env python3
-"""
-Download all Empatica raw .avro files under a participant_data base prefix,
-mirroring the S3 directory structure locally and writing a manifest CSV.
-
-Example:
-
-  python empatica_raw_avro_all.py \
-      --access-key YOUR_ACCESS_KEY \
-      --secret-key YOUR_SECRET_KEY \
-      --endpoint-url https://s3.amazonaws.com \
-      --bucket empatica-us-east-1-prod-data \
-      --base-prefix v2/829/1/1/participant_data/ \
-      --out-dir ../datasets/raw/empatica_avro \
-      --manifest ../empatica_avro/manifest_raw_avro.csv
-"""
 
 import argparse
 import csv

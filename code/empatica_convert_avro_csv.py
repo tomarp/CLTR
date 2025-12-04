@@ -1,14 +1,4 @@
 #!/usr/bin/env python3
-"""
-Convert all local Empatica Avro files (mirrored from S3) into CSV per sensor.
-
-Example:
-  python empatica_convert_avro_csv.py \
-      --indir ../datasets/raw/empatica_avro \
-      --csv-root ../datasets/raw/empatica_csv
-
-If --csv-root is omitted, CSVs are placed next to each .avro (in <avro_dir>/<basename>/).
-"""
 
 import argparse
 import csv

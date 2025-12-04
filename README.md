@@ -87,7 +87,7 @@ These phase codes (e.g., `B1.2 Skin-Rewarm`, `B2.4 Steady-state`) are exactly th
 
 ---
 
-## Timeline Metadata File (`timeline_metadata.csv`)
+## Timeline Metadata  (`timeline.csv`) file
 
 To facilitate reproducible analysis and cohort definition, the markdown timeline has been converted into a **machine‑readable CSV file** with one row per phase, per participant, per session.
 
@@ -112,8 +112,6 @@ This file can serve as a **metadata index** for:
 - filtering participants (e.g., by condition or available sessions),  
 - extracting specific phases (e.g., all steady‑state segments), and  
 - aligning physiological signals, perception ratings, and environmental measurements on a common session/phase timeline.
-
-Researchers can join this metadata with physiological data tables using participant/session identifiers and timestamps to construct consistent analysis cohorts.
 
 ---
 
