@@ -1,0 +1,93 @@
+{
+  "review_mode": "scientific_audit",
+  "overall_status": "not_phd_research_grade",
+  "overall_score": 52.8,
+  "n_sessions": 8,
+  "n_participants": 2,
+  "n_conditions": 4,
+  "inferential_ok": false,
+  "domains": [
+    {
+      "name": "Sample And Design Coverage",
+      "score": 37.5,
+      "status": "weak",
+      "evidence": [
+        "8 analyzed sessions across 2 participants and 4 conditions.",
+        "Cohort inference gate is closed; output is descriptive only."
+      ]
+    },
+    {
+      "name": "Preprocessing And Data Support",
+      "score": 76.3,
+      "status": "adequate",
+      "evidence": [
+        "Mean questionnaire completeness: 1.0.",
+        "Mean sensor support fractions: Empatica=0.993, BIOPAC=0.469, indoor=0.964.",
+        "Median analytic feature coverage: 0.469."
+      ]
+    },
+    {
+      "name": "Inferential Strength",
+      "score": 25.0,
+      "status": "weak",
+      "evidence": [
+        "Eligible paired contrasts: 0; nominally significant eligible contrasts: 0.",
+        "Maximum paired sample size: 18; maximum absolute Cohen's dz: 18.207.",
+        "Eligible agreement summaries: 3; median eligible Spearman agreement: -0.205."
+      ]
+    },
+    {
+      "name": "Reporting And Scientific Storytelling",
+      "score": 45.0,
+      "status": "limited",
+      "evidence": [
+        "Median main-figure load per session: 47.0; dominant narrative sequence share: 1.0.",
+        "Lead-label diversity ratio: 0.625; atlas-tag diversity ratio: 0.625.",
+        "Cohort pattern atlas present: no; agreement promoted to session main narrative: 0.0."
+      ]
+    },
+    {
+      "name": "Reproducibility And Deliverable Completeness",
+      "score": 80.0,
+      "status": "adequate",
+      "evidence": [
+        "Manifest/session alignment: 8 manifest rows for 8 rendered sessions.",
+        "Cohort endpoint rows: 180; sensor agreement rows: 24; feature-association rows: 21."
+      ]
+    }
+  ],
+  "strengths": [
+    "The framework has a clean end-to-end structure: validation, minute alignment, phase summaries, cohort analysis, and HTML reporting are already integrated.",
+    "The CLTR study design is strong for a controlled repeated-measures dataset: 20 participants, 80 sessions, and all four factorial conditions are represented.",
+    "The current outputs are suitable for a high-quality data descriptor or methods-and-dataset paper.",
+    "Cross-device agreement is quantified rather than assumed, which is important for wearable-vs-lab credibility."
+  ],
+  "blocking_gaps": [
+    "The pipeline remains descriptive because the cohort inference gate is closed for the selected output.",
+    "Predictive benchmarking exists, but it is still preliminary: no nested tuning, calibration analysis, or external validation is implemented.",
+    "Preprocessing is transparent but still summary-driven: there is no modality-specific artifact rejection, signal-quality index, or leakage-aware transform fitting stage.",
+    "The generated report set is presentation-heavy; session narratives are repetitive and too dense for a journal-grade main story.",
+    "Several analytic variables remain sparsely supported (<50% coverage), including: biopac_bloodflow_mean_bpu, biopac_eda_mean_uS, biopac_hr_mean_bpm, biopac_temp_chest_mean_C, eda_delta_uS, temp_delta_C."
+  ],
+  "summary_metrics": {
+    "median_main_figures": 47.0,
+    "median_appendix_figures": 0.0,
+    "dominant_sequence_share": 1.0,
+    "unique_lead_ratio": 0.625,
+    "unique_tag_ratio": 0.625,
+    "agreement_in_main_share": 0.0,
+    "mean_questionnaire_completeness": 1.0,
+    "mean_empatica_fraction": 0.993,
+    "mean_biopac_fraction": 0.469,
+    "mean_indoor_fraction": 0.964,
+    "median_feature_coverage": 0.469,
+    "eligible_contrasts": 0,
+    "significant_eligible_contrasts": 0,
+    "max_pairs": 18,
+    "max_abs_cohens_dz": 18.207,
+    "eligible_agreement_metrics": 3,
+    "median_eligible_spearman_agreement": -0.205,
+    "endpoint_cells": 180,
+    "inferential_endpoint_cells": 0
+  }
+}

@@ -1,0 +1,9 @@
+session_id,participant_id,study_day,condition_code,illuminance_level,time_of_day,has_empatica,has_biopac,in_timeline,empatica_path,biopac_path
+P01_D01_DIM-MOR,P01,D01,DIM-MOR,DIM,MOR,True,True,True,../../../test_dataset/empatica/P01_D01_DIM-MOR,../../../test_dataset/biopac/P01_D01_DIM-MOR
+P01_D02_BRI-MID,P01,D02,BRI-MID,BRI,MID,True,True,True,../../../test_dataset/empatica/P01_D02_BRI-MID,../../../test_dataset/biopac/P01_D02_BRI-MID
+P01_D03_BRI-MOR,P01,D03,BRI-MOR,BRI,MOR,True,True,True,../../../test_dataset/empatica/P01_D03_BRI-MOR,../../../test_dataset/biopac/P01_D03_BRI-MOR
+P01_D04_DIM-MID,P01,D04,DIM-MID,DIM,MID,True,True,True,../../../test_dataset/empatica/P01_D04_DIM-MID,../../../test_dataset/biopac/P01_D04_DIM-MID
+P02_D01_BRI-MID,P02,D01,BRI-MID,BRI,MID,True,True,True,../../../test_dataset/empatica/P02_D01_BRI-MID,../../../test_dataset/biopac/P02_D01_BRI-MID
+P02_D02_DIM-MOR,P02,D02,DIM-MOR,DIM,MOR,True,True,True,../../../test_dataset/empatica/P02_D02_DIM-MOR,../../../test_dataset/biopac/P02_D02_DIM-MOR
+P02_D03_DIM-MID,P02,D03,DIM-MID,DIM,MID,True,True,True,../../../test_dataset/empatica/P02_D03_DIM-MID,../../../test_dataset/biopac/P02_D03_DIM-MID
+P02_D04_BRI-MOR,P02,D04,BRI-MOR,BRI,MOR,True,True,True,../../../test_dataset/empatica/P02_D04_BRI-MOR,../../../test_dataset/biopac/P02_D04_BRI-MOR

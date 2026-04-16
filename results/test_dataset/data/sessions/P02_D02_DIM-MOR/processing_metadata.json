@@ -1,0 +1,47 @@
+{
+  "session_id": "P02_D02_DIM-MOR",
+  "participant_id": "P02",
+  "condition_code": "DIM-MOR",
+  "n_minutes_timeline": 194,
+  "n_minutes_comparison_window": 154,
+  "n_phase_rows": 16,
+  "support": {
+    "questionnaire_completeness": 1.0,
+    "questionnaire_event_completeness": 1.0,
+    "questionnaire_response_completeness": 1.0,
+    "fan_fraction": 0.961038961038961,
+    "empatica_fraction": 1.0,
+    "biopac_fraction": 0.45454545454545453,
+    "indoor_fraction": 0.961038961038961,
+    "outdoor_fraction": 1.0
+  },
+  "quality": {
+    "quality_empatica_hr": 0.16233766233766234,
+    "quality_empatica_eda": 1.0,
+    "quality_empatica_temp": 1.0,
+    "quality_biopac_hr": 0.45454545454545453,
+    "quality_biopac_eda": 0.45454545454545453,
+    "quality_biopac_temp": 0.45454545454545453,
+    "quality_empatica_bvp": 1.0
+  },
+  "questionnaire_design": {
+    "expected_event_count": 32,
+    "observed_event_count": 32,
+    "expected_questions_per_event": 4,
+    "answered_question_cells": 138,
+    "expected_question_cells": 138,
+    "event_completeness": 1.0,
+    "response_completeness": 1.0,
+    "overall_completeness": 1.0
+  },
+  "sensor_overlap_minutes": {
+    "heart_rate": 25,
+    "eda": 70,
+    "temperature": 70
+  },
+  "eligible_agreement_metrics": {
+    "heart_rate": true,
+    "eda": true,
+    "temperature": true
+  }
+}

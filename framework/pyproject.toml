@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cltr-framework"
+version = "0.1.0"
+description = "CLTR preprocessing, analysis, atlas, and report generation framework"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "matplotlib",
+  "numpy",
+  "pandas",
+  "plotly",
+  "scikit-learn",
+  "scipy",
+  "statsmodels",
+]
+
+[project.scripts]
+cltr-framework = "cltr_framework.cli:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["cltr_framework*"]
+

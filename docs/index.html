@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CLTR</title>
+  <meta name="description" content="Chrono-Light Thermal Response: a multimodal controlled warm-exposure dataset crossing light intensity and time-of-day.">
+  <style>
+    :root {
+      --bg-a: #fff7ed;
+      --bg-b: #e0f2fe;
+      --ink: #172033;
+      --muted: #475569;
+      --line: rgba(148, 163, 184, 0.22);
+      --panel: rgba(255, 255, 255, 0.9);
+      --shadow: 0 20px 60px rgba(23, 32, 51, 0.12);
+      --radius: 26px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      color: var(--ink);
+      background: radial-gradient(circle at top, var(--bg-a) 0%, var(--bg-b) 42%, #f8fafc 100%);
+    }
+    .page {
+      width: min(100%, 1240px);
+      margin: 0 auto;
+      padding: 24px 20px 56px;
+    }
+    .bar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      backdrop-filter: blur(16px);
+      background: rgba(248, 250, 252, 0.9);
+      border-bottom: 1px solid var(--line);
+    }
+    .barInner {
+      width: min(100%, 1240px);
+      margin: 0 auto;
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 120px;
+      height: 58px;
+      text-decoration: none;
+    }
+    .brand img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+    .links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+    .links a {
+      display: inline-flex;
+      align-items: center;
+      min-height: 40px;
+      padding: 0 14px;
+      border-radius: 999px;
+      text-decoration: none;
+      font: 600 0.84rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: rgba(255, 255, 255, 0.84);
+      border: 1px solid var(--line);
+      box-shadow: 0 10px 24px rgba(23, 32, 51, 0.06);
+    }
+    .hero {
+      min-height: calc(100vh - 130px);
+      display: grid;
+      place-items: center;
+    }
+    .heroPanel {
+      width: min(100%, 960px);
+      display: grid;
+      gap: 24px;
+      justify-items: center;
+      text-align: center;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(3rem, 8vw, 5.6rem);
+      line-height: 0.95;
+      letter-spacing: -0.06em;
+    }
+    .subtitle {
+      margin: 0;
+      max-width: 58ch;
+      color: var(--muted);
+      font-size: 1.05rem;
+      line-height: 1.75;
+    }
+    .visual {
+      width: min(100%, 760px);
+      padding: 24px;
+      border-radius: 34px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+    }
+    .visual img {
+      width: 100%;
+      height: auto;
+      display: block;
+      object-fit: contain;
+    }
+    .footer {
+      width: min(100%, 1040px);
+      margin-top: 8px;
+      padding: 18px 20px;
+      border-radius: var(--radius);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+    }
+    .marks {
+      width: 100%;
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 14px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .mark {
+      flex: 1 1 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 0;
+    }
+    .mark img {
+      width: 100%;
+      max-width: 220px;
+      height: clamp(52px, 7vw, 88px);
+      object-fit: contain;
+      display: block;
+    }
+    @media (max-width: 900px) {
+      .barInner { display: grid; }
+      .links { justify-content: flex-start; }
+      .page { padding: 20px 16px 40px; }
+      .marks { gap: 8px; }
+      .brand { width: 104px; height: 52px; }
+      .mark img { height: clamp(40px, 9vw, 64px); }
+    }
+  </style>
+</head>
+<body>
+  <header class="bar">
+    <div class="barInner">
+      <a class="brand" href="./index.html" aria-label="Open CLTR homepage">
+        <img src="./assets/logos/cltr.png" alt="CLTR homepage logo">
+      </a>
+      <nav class="links" aria-label="Primary">
+        <a href="./atlas/test_dataset/work/index.html">Atlas</a>
+        <a href="https://github.com/tomarp/cltr">Project GitHub</a>
+        <a href="https://doi.org/10.5281/zenodo.17817175">Zenodo</a>
+        <a href="https://github.com/tomarp/cltr/tree/main/framework">Framework</a>
+      </nav>
+    </div>
+  </header>
+  <main class="page">
+    <section class="hero">
+      <section class="heroPanel">
+        <h1>CLTR</h1>
+        <p class="subtitle">Chrono-Light Thermal Response is a multimodal controlled warm-exposure study built around a 2 × 2 design crossing bright versus dim light with morning versus midday sessions. It brings together continuous physiological signals, environmental measurements, repeated thermal comfort and sensation ratings, and structured fan-cooling and re-warming phases to support research in thermal comfort, chrono-physiology, and intelligent building control.</p>
+        <div class="visual">
+          <img src="./study_experiment.png" alt="CLTR study experiment visual">
+        </div>
+        <footer class="footer">
+          <div class="marks">
+            <div class="mark">
+              <img src="./assets/logos/La_Rochelle.png" alt="La Rochelle Universite logo">
+            </div>
+            <div class="mark">
+              <img src="./assets/logos/unipg.png" alt="UNIPG logo">
+            </div>
+            <div class="mark">
+              <img src="./assets/logos/music.png" alt="MUSIC Doctoral Network logo">
+            </div>
+            <div class="mark">
+              <img src="./assets/logos/eu_funding.png" alt="European Union logo">
+            </div>
+          </div>
+        </footer>
+      </section>
+    </section>
+  </main>
+</body>
+</html>

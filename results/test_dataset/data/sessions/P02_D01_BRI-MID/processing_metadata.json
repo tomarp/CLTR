@@ -1,0 +1,47 @@
+{
+  "session_id": "P02_D01_BRI-MID",
+  "participant_id": "P02",
+  "condition_code": "BRI-MID",
+  "n_minutes_timeline": 194,
+  "n_minutes_comparison_window": 154,
+  "n_phase_rows": 16,
+  "support": {
+    "questionnaire_completeness": 1.0,
+    "questionnaire_event_completeness": 1.0,
+    "questionnaire_response_completeness": 1.0,
+    "fan_fraction": 1.0,
+    "empatica_fraction": 0.9415584415584416,
+    "biopac_fraction": 0.4805194805194805,
+    "indoor_fraction": 1.0,
+    "outdoor_fraction": 1.0
+  },
+  "quality": {
+    "quality_empatica_hr": 0.05194805194805195,
+    "quality_empatica_eda": 0.9415584415584416,
+    "quality_empatica_temp": 0.9415584415584416,
+    "quality_biopac_hr": 0.4805194805194805,
+    "quality_biopac_eda": 0.4805194805194805,
+    "quality_biopac_temp": 0.4805194805194805,
+    "quality_empatica_bvp": 0.935064935064935
+  },
+  "questionnaire_design": {
+    "expected_event_count": 32,
+    "observed_event_count": 32,
+    "expected_questions_per_event": 4,
+    "answered_question_cells": 138,
+    "expected_question_cells": 138,
+    "event_completeness": 1.0,
+    "response_completeness": 1.0,
+    "overall_completeness": 1.0
+  },
+  "sensor_overlap_minutes": {
+    "heart_rate": 8,
+    "eda": 65,
+    "temperature": 65
+  },
+  "eligible_agreement_metrics": {
+    "heart_rate": false,
+    "eda": true,
+    "temperature": true
+  }
+}
