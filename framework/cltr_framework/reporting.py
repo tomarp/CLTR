@@ -75,10 +75,11 @@ PROJECT_GITHUB_URL = "https://github.com/tomarp/cltr"
 PROJECT_ZENODO_URL = "https://doi.org/10.5281/zenodo.17817175"
 PROJECT_FRAMEWORK_URL = "https://github.com/tomarp/cltr/tree/main/framework"
 WORK_LOGO_DIR = Path(__file__).resolve().parent.parent / "logos"
-WORK_HOME_LOGO_FILE = "music.png"
+WORK_HOME_LOGO_FILE = "cltr.png"
 WORK_FOOTER_LOGOS = [
     ("La_Rochelle.png", "La Rochelle Universite"),
     ("unipg.png", "UNIPG"),
+    ("music.png", "MUSIC Doctoral Network"),
     ("eu_funding.png", "European Union"),
 ]
 MAX_SESSION_MAIN_FIGURES = 5
@@ -366,7 +367,7 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
 .page {{ width:min(100%, {ui['page_max_width']}); margin:0 auto; padding:24px clamp(16px,2.4vw,28px) 48px; box-sizing:border-box; }}
 .primaryBar {{ position:sticky; top:0; z-index:24; backdrop-filter:blur(16px); background:rgba(248,250,252,0.92); border-bottom:1px solid rgba(148,163,184,0.18); }}
 .primaryBarInner {{ width:min(100%, {ui['page_max_width']}); margin:0 auto; padding:12px clamp(16px,2.4vw,28px); display:flex; align-items:center; justify-content:space-between; gap:16px; box-sizing:border-box; }}
-.logoLink {{ display:inline-flex; align-items:center; justify-content:center; width:56px; height:56px; border-radius:18px; text-decoration:none; background:rgba(255,255,255,0.88); box-shadow:0 12px 28px rgba(23,32,51,0.12); padding:6px; box-sizing:border-box; }}
+.logoLink {{ display:inline-flex; align-items:center; justify-content:center; width:120px; height:58px; text-decoration:none; }}
 .logoLink:hover {{ transform:translateY(-1px); }}
 .logoImage {{ width:100%; height:100%; object-fit:contain; display:block; }}
 .secondaryBar {{ position:sticky; top:71px; z-index:23; backdrop-filter:blur(14px); background:rgba(255,255,255,0.78); border-bottom:1px solid rgba(148,163,184,0.16); }}
@@ -381,12 +382,10 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
 .reportKind--home .secondaryBarType::before {{ background:#7c3aed; box-shadow:0 0 0 3px rgba(124,58,237,0.14); }}
 .secondaryBarText {{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }}
 .mastheadActions {{ display:flex; align-items:center; gap:12px; flex-shrink:0; }}
-.socialLinks {{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }}
-.socialLink {{ display:inline-flex; align-items:center; gap:8px; min-height:38px; padding:0 12px; border-radius:999px; text-decoration:none; color:#172033; background:rgba(255,255,255,0.82); border:1px solid rgba(148,163,184,0.24); box-shadow:0 10px 24px rgba(23,32,51,0.06); font:600 0.79rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }}
-.socialLink:hover {{ background:#ffffff; border-color:#cbd5e1; }}
+.socialLinks {{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }}
+.socialLink {{ display:inline-flex; align-items:center; justify-content:center; min-height:44px; padding:0 16px; border-radius:999px; text-decoration:none; color:#172033; background:linear-gradient(180deg,rgba(255,255,255,0.96) 0%,rgba(255,247,237,0.96) 100%); border:1px solid rgba(251,146,60,0.28); box-shadow:0 12px 28px rgba(23,32,51,0.08); font:700 0.92rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:0.01em; }}
+.socialLink:hover {{ background:#ffffff; border-color:#fb923c; box-shadow:0 16px 34px rgba(23,32,51,0.12); transform:translateY(-1px); }}
 .socialLink.isDisabled {{ pointer-events:none; opacity:0.58; }}
-.socialIcon {{ width:16px; height:16px; display:inline-flex; align-items:center; justify-content:center; color:currentColor; }}
-.socialIcon svg {{ width:16px; height:16px; fill:currentColor; display:block; }}
 .menuButton {{ appearance:none; border:1px solid rgba(148,163,184,0.28); background:rgba(255,255,255,0.88); color:#172033; border-radius:999px; padding:10px 14px; display:inline-flex; align-items:center; gap:10px; font:600 0.82rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; cursor:pointer; box-shadow:0 10px 24px rgba(23,32,51,0.08); }}
 .menuButton:hover {{ background:#ffffff; border-color:#cbd5e1; }}
 .menuButtonBars {{ display:grid; gap:3px; }}
@@ -466,7 +465,7 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
 .page {{ width:min(100%, {ui['page_max_width']}); margin:0 auto; padding:{ui['index_page_padding']}; box-sizing:border-box; }}
 .primaryBar {{ position:sticky; top:0; z-index:24; backdrop-filter:blur(16px); background:rgba(248,250,252,0.92); border-bottom:1px solid rgba(148,163,184,0.18); }}
 .primaryBarInner {{ width:min(100%, {ui['page_max_width']}); margin:0 auto; padding:12px 28px; display:flex; align-items:center; justify-content:space-between; gap:16px; box-sizing:border-box; }}
-.logoLink {{ display:inline-flex; align-items:center; justify-content:center; width:56px; height:56px; border-radius:18px; text-decoration:none; background:rgba(255,255,255,0.88); box-shadow:0 12px 28px rgba(23,32,51,0.12); padding:6px; box-sizing:border-box; }}
+.logoLink {{ display:inline-flex; align-items:center; justify-content:center; width:120px; height:58px; text-decoration:none; }}
 .logoLink:hover {{ transform:translateY(-1px); }}
 .logoImage {{ width:100%; height:100%; object-fit:contain; display:block; }}
 .secondaryBar {{ position:sticky; top:71px; z-index:23; backdrop-filter:blur(14px); background:rgba(255,255,255,0.78); border-bottom:1px solid rgba(148,163,184,0.16); }}
@@ -477,12 +476,10 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
 .secondaryBarType::before {{ content:""; width:8px; height:8px; border-radius:999px; background:#fb7185; box-shadow:0 0 0 3px rgba(251,113,133,0.14); }}
 .reportKind--home .secondaryBarType::before {{ background:#7c3aed; box-shadow:0 0 0 3px rgba(124,58,237,0.14); }}
 .secondaryBarText {{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }}
-.socialLinks {{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }}
-.socialLink {{ display:inline-flex; align-items:center; gap:8px; min-height:38px; padding:0 12px; border-radius:999px; text-decoration:none; color:#172033; background:rgba(255,255,255,0.82); border:1px solid rgba(148,163,184,0.24); box-shadow:0 10px 24px rgba(23,32,51,0.06); font:600 0.79rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }}
-.socialLink:hover {{ background:#ffffff; border-color:#cbd5e1; }}
+.socialLinks {{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }}
+.socialLink {{ display:inline-flex; align-items:center; justify-content:center; min-height:44px; padding:0 16px; border-radius:999px; text-decoration:none; color:#172033; background:linear-gradient(180deg,rgba(255,255,255,0.96) 0%,rgba(255,247,237,0.96) 100%); border:1px solid rgba(251,146,60,0.28); box-shadow:0 12px 28px rgba(23,32,51,0.08); font:700 0.92rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:0.01em; }}
+.socialLink:hover {{ background:#ffffff; border-color:#fb923c; box-shadow:0 16px 34px rgba(23,32,51,0.12); transform:translateY(-1px); }}
 .socialLink.isDisabled {{ pointer-events:none; opacity:0.58; }}
-.socialIcon {{ width:16px; height:16px; display:inline-flex; align-items:center; justify-content:center; color:currentColor; }}
-.socialIcon svg {{ width:16px; height:16px; fill:currentColor; display:block; }}
 .mastheadActions {{ display:flex; align-items:center; gap:12px; flex-shrink:0; }}
 .menuButton {{ appearance:none; border:1px solid rgba(148,163,184,0.28); background:rgba(255,255,255,0.88); color:#172033; border-radius:999px; padding:10px 14px; display:inline-flex; align-items:center; gap:10px; font:600 0.82rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; cursor:pointer; box-shadow:0 10px 24px rgba(23,32,51,0.08); }}
 .menuButton:hover {{ background:#ffffff; border-color:#cbd5e1; }}
@@ -522,39 +519,30 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
 @media (max-width:{ui['index_mobile_breakpoint']}) {{ .primaryBarInner,.secondaryBarInner,.hero,.grid,.heroFacts {{ grid-template-columns:1fr; }} .primaryBarInner,.secondaryBarInner {{ display:grid; padding:12px 20px; }} .mastheadActions,.secondaryBarActions {{ justify-content:space-between; }} .secondaryBarText {{ white-space:normal; }} .menuPanel {{ right:auto; left:0; width:min(100%, 420px); }} .heroSticky {{ position:static; }} .socialLinks {{ order:2; }} }}
 """.strip()
 
-    def _social_links_html(self, *, atlas_href: str) -> str:
+    def _social_links_html(self, *, publication_href: str) -> str:
         links = [
-            ("Atlas", atlas_href, self._social_icon_svg("atlas")),
-            ("GitHub", PROJECT_GITHUB_URL, self._social_icon_svg("github")),
-            ("Zenodo", PROJECT_ZENODO_URL, self._social_icon_svg("zenodo")),
-            ("Framework", PROJECT_FRAMEWORK_URL, self._social_icon_svg("framework")),
+            ("Publication", publication_href),
+            ("GitHub", PROJECT_GITHUB_URL),
+            ("Zenodo", PROJECT_ZENODO_URL),
+            ("Framework", PROJECT_FRAMEWORK_URL),
         ]
         items = []
-        for label, url, icon in links:
+        for label, url in links:
             href = str(url or "").strip() or "#"
             disabled = href == "#"
             css_class = "socialLink isDisabled" if disabled else "socialLink"
             title = f"{label} link unavailable" if disabled else f"Open {label}"
             if disabled:
                 attrs = " aria-disabled='true'"
-            elif label == "Atlas":
+            elif label == "Publication":
                 attrs = ""
             else:
                 attrs = " target='_blank' rel='noopener noreferrer'"
             items.append(
                 f"<a class='{css_class}' href='{html_escape(href)}' title='{html_escape(title)}'{attrs}>"
-                f"<span class='socialIcon' aria-hidden='true'>{icon}</span><span>{html_escape(label)}</span></a>"
+                f"<span>{html_escape(label)}</span></a>"
             )
         return f"<div class='socialLinks'>{''.join(items)}</div>"
-
-    def _social_icon_svg(self, kind: str) -> str:
-        icons = {
-            "atlas": "<svg viewBox='0 0 16 16' aria-hidden='true'><path d='M2 3.5A1.5 1.5 0 0 1 3.5 2h9A1.5 1.5 0 0 1 14 3.5v9a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 12.5v-9Zm2.2.5v8h7.6V4H4.2Zm1.1 6.5 1.8-2.4 1.6 1.8 2.1-3 1.2.84-3.22 4.6-1.56-1.74-1.54 2.06-1.38-1.16Z'/></svg>",
-            "github": "<svg viewBox='0 0 16 16' aria-hidden='true'><path d='M8 0C3.58 0 0 3.67 0 8.2c0 3.63 2.29 6.7 5.47 7.78.4.08.55-.18.55-.4 0-.19-.01-.84-.01-1.52-2.01.38-2.53-.51-2.69-.97-.09-.24-.48-.97-.81-1.16-.27-.15-.66-.53-.01-.54.61-.01 1.05.58 1.19.82.7 1.2 1.82.86 2.26.66.07-.52.27-.86.49-1.06-1.78-.21-3.64-.92-3.64-4.08 0-.9.31-1.64.82-2.22-.08-.21-.36-1.05.08-2.19 0 0 .67-.22 2.2.85A7.4 7.4 0 0 1 8 3.8c.68 0 1.37.09 2.01.27 1.53-1.07 2.2-.85 2.2-.85.44 1.14.16 1.98.08 2.19.51.58.82 1.31.82 2.22 0 3.17-1.87 3.87-3.66 4.08.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .22.15.49.55.4A8.21 8.21 0 0 0 16 8.2C16 3.67 12.42 0 8 0Z'/></svg>",
-            "framework": "<svg viewBox='0 0 16 16' aria-hidden='true'><path d='M2 4.2 8 1l6 3.2v7.6L8 15l-6-3.2V4.2Zm2 1.1v5.36L8 12.8l4-2.14V5.3L8 3.2 4 5.3Zm2 .74h4v1.5H6v-1.5Zm0 2.6h4v1.5H6v-1.5Z'/></svg>",
-            "zenodo": "<svg viewBox='0 0 16 16' aria-hidden='true'><path d='M2 2h12v2.1L5.7 11.9H14V14H2v-2.1L10.3 4.1H2V2Z'/></svg>",
-        }
-        return icons.get(kind, icons["atlas"])
 
     def _logo_image_svg(self) -> str:
         return (
@@ -580,7 +568,7 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
         self,
         *,
         home_href: str,
-        atlas_href: str,
+        publication_href: str,
         logo_src: str,
         page_type: str,
         page_meta: str,
@@ -608,9 +596,9 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
         return (
             f"<header class='primaryBar'>"
             f"<div class='primaryBarInner'>"
-            f"<a class='logoLink' href='{html_escape(home_href)}' title='Open atlas entry' aria-label='Open atlas entry'><img class='logoImage' src='{html_escape(logo_src)}' alt='CLTR logo'/></a>"
+            f"<a class='logoLink' href='{html_escape(home_href)}' title='Open CLTR homepage' aria-label='Open CLTR homepage'><img class='logoImage' src='{html_escape(logo_src)}' alt='CLTR logo'/></a>"
             f"<div class='mastheadActions'>"
-            f"{self._social_links_html(atlas_href=atlas_href)}"
+            f"{self._social_links_html(publication_href=publication_href)}"
             f"</div>"
             f"</div>"
             f"</header>"
@@ -623,7 +611,6 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
             marks.append(
                 f"<div class='footerMark'>"
                 f"<img class='footerMarkImage' src='{html_escape(footer_logo_paths[logo_name])}' alt='{html_escape(label)} logo'/>"
-                f"<span>{html_escape(label)}</span>"
                 f"</div>"
             )
         return f"<div class='footerMarks'>{''.join(marks)}</div>"
@@ -631,51 +618,22 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
     def _home_page_css(self) -> str:
         ui = REPORT_UI
         return f"""
-body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033; background:radial-gradient(circle at top,#fff7ed 0%,#e0f2fe 42%,#f8fafc 100%); }}
-.page {{ width:min(100%, {ui['page_max_width']}); margin:0 auto; padding:28px clamp(16px,2.4vw,28px) 56px; box-sizing:border-box; }}
-.primaryBar {{ position:sticky; top:0; z-index:24; backdrop-filter:blur(16px); background:rgba(248,250,252,0.92); border-bottom:1px solid rgba(148,163,184,0.18); }}
-.primaryBarInner {{ width:min(100%, {ui['page_max_width']}); margin:0 auto; padding:12px clamp(16px,2.4vw,28px); display:flex; align-items:center; justify-content:space-between; gap:16px; box-sizing:border-box; }}
-.logoLink {{ display:inline-flex; align-items:center; justify-content:center; width:56px; height:56px; border-radius:18px; text-decoration:none; background:rgba(255,255,255,0.88); box-shadow:0 12px 28px rgba(23,32,51,0.12); padding:6px; box-sizing:border-box; }}
-.logoImage {{ width:100%; height:100%; object-fit:contain; display:block; }}
-.secondaryBar {{ position:sticky; top:71px; z-index:23; backdrop-filter:blur(14px); background:rgba(255,255,255,0.78); border-bottom:1px solid rgba(148,163,184,0.16); }}
-.secondaryBarInner {{ width:min(100%, {ui['page_max_width']}); margin:0 auto; padding:10px clamp(16px,2.4vw,28px); display:flex; align-items:center; justify-content:space-between; gap:14px; box-sizing:border-box; }}
-.secondaryBarMeta {{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size:0.84rem; color:#475569; }}
-.secondaryBarType {{ display:inline-flex; align-items:center; gap:8px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:#172033; }}
-.secondaryBarType::before {{ content:""; width:8px; height:8px; border-radius:999px; background:#7c3aed; box-shadow:0 0 0 3px rgba(124,58,237,0.14); }}
-.secondaryBarText {{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }}
-.mastheadActions {{ position:relative; display:flex; align-items:center; gap:12px; flex-shrink:0; }}
-.socialLinks {{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }}
-.socialLink {{ display:inline-flex; align-items:center; gap:8px; min-height:38px; padding:0 12px; border-radius:999px; text-decoration:none; color:#172033; background:rgba(255,255,255,0.82); border:1px solid rgba(148,163,184,0.24); box-shadow:0 10px 24px rgba(23,32,51,0.06); font:600 0.79rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }}
-.socialLink:hover {{ background:#ffffff; border-color:#cbd5e1; }}
-.socialLink.isDisabled {{ pointer-events:none; opacity:0.58; }}
-.socialIcon {{ width:16px; height:16px; display:inline-flex; align-items:center; justify-content:center; color:currentColor; }}
-.socialIcon svg {{ width:16px; height:16px; fill:currentColor; display:block; }}
-.menuButton {{ appearance:none; border:1px solid rgba(148,163,184,0.28); background:rgba(255,255,255,0.88); color:#172033; border-radius:999px; padding:10px 14px; display:inline-flex; align-items:center; gap:10px; font:600 0.82rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; cursor:pointer; box-shadow:0 10px 24px rgba(23,32,51,0.08); }}
-.menuButton:hover {{ background:#ffffff; border-color:#cbd5e1; }}
-.menuButtonBars {{ display:grid; gap:3px; }}
-.menuButtonBars span {{ display:block; width:14px; height:2px; border-radius:999px; background:currentColor; }}
-.menuPanel {{ position:absolute; right:0; top:calc(100% + 10px); width:min(420px, calc(100vw - 32px)); max-height:min(70vh, 720px); overflow:auto; padding:14px 12px; background:rgba(255,255,255,0.97); border:1px solid rgba(148,163,184,0.22); border-radius:{ui['panel_radius']}; box-shadow:0 22px 54px rgba(23,32,51,0.16); backdrop-filter:blur(18px); display:none; }}
-.menuPanel.open {{ display:grid; gap:10px; }}
-.menuTitle {{ margin:0 0 2px; font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size:0.78rem; letter-spacing:0.14em; text-transform:uppercase; color:#64748b; }}
-.nav {{ display:grid; gap:14px; }}
-.navList {{ display:grid; grid-template-columns:1fr; gap:10px; }}
-.nav a {{ width:100%; min-height:44px; text-decoration:none; color:#172033; background:rgba(255,247,237,0.95); border:1px solid #fed7aa; border-radius:14px; display:grid; grid-template-columns:auto minmax(0,1fr); align-items:start; gap:10px; padding:10px 12px; font-size:0.72rem; font-weight:700; font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height:1.2; box-shadow:inset 0 0 0 4px rgba(255,255,255,0.96); box-sizing:border-box; }}
-.nav a:hover {{ background:#ffedd5; border-color:#fdba74; }}
-.nav a span {{ display:block; font-size:0.78rem; font-weight:500; color:#475569; overflow-wrap:anywhere; }}
-.landing {{ min-height:calc(100vh - 180px); display:grid; place-items:center; }}
-.hero {{ width:min(100%, 1040px); display:grid; gap:24px; justify-items:center; text-align:center; }}
-.heroTitle {{ margin:0; font-size:clamp(3rem,8vw,5.6rem); line-height:0.95; letter-spacing:-0.06em; color:#0f172a; }}
-.heroSubtitle {{ margin:0; max-width:54ch; color:#475569; font-size:1.04rem; line-height:1.75; }}
-.heroVisual {{ width:min(100%, 720px); aspect-ratio:4/3; border-radius:36px; background:rgba(255,255,255,0.9); box-shadow:0 40px 80px rgba(15,23,42,0.14); display:grid; place-items:center; overflow:hidden; padding:20px; box-sizing:border-box; }}
-.heroVisualImage {{ width:100%; height:100%; object-fit:contain; display:block; }}
-.homeFooter {{ width:min(100%, 1040px); margin-top:8px; padding:20px 22px; border-radius:24px; background:rgba(255,255,255,0.84); border:1px solid rgba(148,163,184,0.22); box-shadow:0 18px 44px rgba(23,32,51,0.08); display:grid; gap:12px; justify-items:center; }}
-.footerLabel {{ font:700 0.72rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; text-transform:uppercase; letter-spacing:0.12em; color:#64748b; }}
-.footerMeta {{ margin:0; max-width:62ch; text-align:center; color:#475569; line-height:1.6; }}
-.footerMarks {{ display:flex; gap:12px; flex-wrap:wrap; margin-top:14px; }}
-.footerMark {{ display:grid; gap:8px; justify-items:center; align-content:start; min-width:180px; }}
-.footerMarkImage {{ width:min(100%, 180px); height:72px; object-fit:contain; display:block; }}
-.footerMark span {{ font:600 0.78rem/1.2 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color:#334155; }}
-@media (max-width:{ui['mobile_breakpoint']}) {{ .primaryBarInner,.secondaryBarInner {{ display:grid; padding:12px 20px; }} .mastheadActions,.secondaryBarActions {{ justify-content:space-between; }} .secondaryBarText {{ white-space:normal; }} .socialLinks {{ order:2; }} }}
+{self._shared_report_css()}
+.page {{ padding:{ui['page_padding']}; }}
+.landing {{ min-height:calc(100vh - 160px); display:grid; place-items:center; }}
+.hero {{ width:min(100%, 1120px); grid-template-columns:minmax(0,1fr); justify-items:center; gap:18px; text-align:center; }}
+.heroLead {{ width:min(100%, 960px); background:linear-gradient(135deg,#172033 0%,#1d4ed8 55%,#06b6d4 100%); border-color:rgba(191,219,254,0.45); color:#eff6ff; }}
+.heroLead::before {{ background:radial-gradient(circle at top right,rgba(255,255,255,0.24) 0%,rgba(255,255,255,0) 42%); }}
+.heroLead .eyebrow {{ color:#dbeafe; }}
+.heroLead .title,.heroLead .subtitle {{ color:#f8fafc; }}
+.heroLead .subtitle {{ max-width:58ch; margin:0 auto; }}
+.heroVisual {{ width:min(100%, 860px); border-radius:28px; border:1px solid rgba(219,234,254,0.34); background:rgba(255,255,255,0.14); box-shadow:inset 0 1px 0 rgba(255,255,255,0.2); padding:20px; margin-top:20px; }}
+.heroVisualImage {{ width:100%; height:auto; display:block; object-fit:contain; }}
+.homeFooter {{ width:min(100%, 1040px); display:grid; gap:0; justify-items:center; padding:20px 22px; }}
+.footerMarks {{ width:100%; display:flex; flex-wrap:nowrap; gap:14px; align-items:center; justify-content:space-between; }}
+.footerMark {{ flex:1 1 0; display:flex; align-items:center; justify-content:center; min-width:0; }}
+.footerMarkImage {{ width:100%; max-width:220px; height:clamp(52px, 7vw, 88px); object-fit:contain; display:block; }}
+@media (max-width:{ui['mobile_breakpoint']}) {{ .hero {{ gap:16px; }} .heroVisual {{ padding:16px; }} .footerMarks {{ gap:8px; }} .footerMarkImage {{ height:clamp(40px, 9vw, 64px); }} }}
 """.strip()
 
     def _home_html(self, manifest: pd.DataFrame, session_reports: list[dict], cohort_report: dict) -> str:
@@ -683,7 +641,7 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
         logo_paths = self._logo_paths("work")
         chrome = self._shared_chrome(
             home_href="index.html",
-            atlas_href="cltr_atlas.html",
+            publication_href="publication.html",
             logo_src=logo_paths["home"],
             page_type="Home",
             page_meta="Project homepage for the CLTR study",
@@ -703,7 +661,7 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
         return f"""<!doctype html><html><head><meta charset='utf-8'><title>{WORK_HOME_TITLE}</title>
 <style>
 {self._home_page_css()}
-</style></head><body class='reportKind--home'>{chrome}<main class='page'><section class='landing'><section class='hero'><h1 class='heroTitle'>{WORK_HOME_TITLE}</h1><p class='heroSubtitle'>{WORK_HOME_SUBTITLE}. A project homepage for the CLTR study, with the atlas as the analytical entry point and the framework maintained as a separate software repository.</p><div class='heroVisual'><img class='heroVisualImage' src='{html_escape(logo_paths["home"])}' alt='CLTR project logo'/></div><footer class='homeFooter'><div class='footerLabel'>Institutional Partners</div><p class='footerMeta'>The project homepage is distinct from the CLTR framework repository. Institutional partners and funding marks are presented here using the published logo assets from the work package.</p>{self._home_footer_logos_html(logo_paths["footer"])}</footer></section></section></main><script>
+</style></head><body class='reportKind--home'>{chrome}<main class='page'><section class='landing'><section class='hero'><section class='panel heroLead'><div class='eyebrow'>Project Homepage</div><h1 class='title'>{WORK_HOME_TITLE}</h1><p class='subtitle'>{WORK_HOME_SUBTITLE}. A project homepage for the CLTR study, with the atlas as the analytical entry point and the framework maintained as a separate software repository.</p><div class='heroVisual'><img class='heroVisualImage' src='{html_escape(logo_paths["home"])}' alt='CLTR project logo'/></div></section><footer class='panel homeFooter'>{self._home_footer_logos_html(logo_paths["footer"])}</footer></section></section></main><script>
 </script></body></html>"""
 
     def _spec(self, *, code: str, stem: str, title: str, summary: str, fig, tags: list[str], evidence_score: int, evidence_label: str, gating_note: str = "", phase_focus: str = "all", section: str = "results") -> dict:
@@ -5436,8 +5394,8 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
             f"</section>"
         )
         masthead = self._shared_chrome(
-            home_href="index.html",
-            atlas_href="cltr_atlas.html",
+            home_href="../../../index.html",
+            publication_href="../../../publication.html",
             logo_src=self._logo_paths("work")["home"],
             page_type="Atlas",
             page_meta=f"{len(records)} session reports and one cohort summary",
@@ -5536,12 +5494,12 @@ if(sessionMenuButton&&sessionMenuPanel){{ sessionMenuButton.addEventListener('cl
         )
         plotly_js = f"<script>{get_plotlyjs()}</script>" if any(spec.get("html_fragment") for spec in all_specs) else ""
         badge = "Cohort Report" if str(doc_kind) == "cohort" else "Session Report"
-        home_href = "../../work/index.html" if str(doc_kind) == "cohort" else "../../../work/index.html"
-        atlas_href = "../../work/cltr_atlas.html" if str(doc_kind) == "cohort" else "../../../work/cltr_atlas.html"
+        home_href = "../../../../index.html" if str(doc_kind) == "cohort" else "../../../../../index.html"
+        publication_href = "../../../../publication.html" if str(doc_kind) == "cohort" else "../../../../../publication.html"
         logo_src = self._logo_paths("cohort" if str(doc_kind) == "cohort" else "session")["home"]
         masthead = self._shared_chrome(
             home_href=home_href,
-            atlas_href=atlas_href,
+            publication_href=publication_href,
             logo_src=logo_src,
             page_type=badge,
             page_meta=title,
