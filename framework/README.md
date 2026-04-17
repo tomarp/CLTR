@@ -1,19 +1,17 @@
 # CLTR Framework
 
-Analysis and reporting framework for the Controlled Laboratory Thermal Response study.
+Analysis framework for the Controlled Laboratory Thermal Response study.
 
 ## Role In The CLTR Repository
 
 This folder is the software layer inside the main `cltr` repository.
-It preprocesses the dataset, runs cohort and session analysis, and generates the atlas and report outputs.
+It preprocesses the dataset, runs cohort and session analysis, and generates the full results tree, including report artifacts under `../../results/.../reports/` when run from `framework/`.
 
 ## Layout
 
 - `cltr_framework/`: Python package
 - `docs/`: framework notes and audit material
 - `scripts/`: utility scripts
-- `logos/`: assets copied into generated report outputs
-
 ## Install
 
 ```bash
@@ -36,5 +34,24 @@ python -m cltr_framework run-all --dataset-root /path/to/dataset --outdir /path/
 
 ## Output
 
-Generated artifacts should be written into the parent project results tree, for example `../results/test_dataset/`.
-Published atlas files can then be copied into `../docs/atlas/test_dataset/`.
+Generated artifacts should be written into the sibling `work/results/` tree, for example `../../results/test_dataset/`.
+
+Atlas publication is a separate manual step owned by the main repository layer. Only the atlas web bundle should be published into `../docs/atlas/`, not the full results tree:
+
+```bash
+python ../scripts/publish_atlas.py \
+  --results-dir ../../results/test_dataset \
+  --docs-atlas-dir ../docs/atlas
+```
+
+This copies only:
+
+- `reports/work/`
+- `reports/cohort/`
+- `reports/sessions/`
+
+It excludes review JSON/Markdown files from the published atlas bundle and flattens the public atlas to:
+
+- `docs/atlas/index.html`
+- `docs/atlas/cohort/`
+- `docs/atlas/sessions/`

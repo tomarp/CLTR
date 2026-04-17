@@ -48,6 +48,72 @@ PRIMARY_ENDPOINTS = [
     "biopac_bloodflow_mean_bpu",
 ]
 
+SENSOR_AUDIT_SPECS = [
+    {
+        "signal_stream": "biopac_hr",
+        "device": "BIOPAC",
+        "construct": "heart_rate",
+        "column": "biopac_hr_mean_bpm",
+        "quality_column": "quality_biopac_hr",
+        "bounds": (40.0, 180.0),
+        "agreement_metric": "heart_rate",
+    },
+    {
+        "signal_stream": "empatica_hr",
+        "device": "Empatica",
+        "construct": "heart_rate",
+        "column": "empatica_hr_mean_bpm",
+        "quality_column": "quality_empatica_hr",
+        "bounds": (40.0, 180.0),
+        "agreement_metric": "heart_rate",
+    },
+    {
+        "signal_stream": "biopac_eda",
+        "device": "BIOPAC",
+        "construct": "eda",
+        "column": "biopac_eda_mean_uS",
+        "quality_column": "quality_biopac_eda",
+        "bounds": (0.0, 60.0),
+        "agreement_metric": "eda",
+    },
+    {
+        "signal_stream": "empatica_eda",
+        "device": "Empatica",
+        "construct": "eda",
+        "column": "empatica_eda_mean_uS",
+        "quality_column": "quality_empatica_eda",
+        "bounds": (0.0, 40.0),
+        "agreement_metric": "eda",
+    },
+    {
+        "signal_stream": "biopac_temp",
+        "device": "BIOPAC",
+        "construct": "temperature",
+        "column": "biopac_temp_chest_mean_C",
+        "quality_column": "quality_biopac_temp",
+        "bounds": (20.0, 42.0),
+        "agreement_metric": "temperature",
+    },
+    {
+        "signal_stream": "empatica_temp",
+        "device": "Empatica",
+        "construct": "temperature",
+        "column": "empatica_temp_mean_C",
+        "quality_column": "quality_empatica_temp",
+        "bounds": (20.0, 40.0),
+        "agreement_metric": "temperature",
+    },
+    {
+        "signal_stream": "empatica_bvp",
+        "device": "Empatica",
+        "construct": "bvp_source",
+        "column": "empatica_bvp_mean",
+        "quality_column": "quality_empatica_bvp",
+        "bounds": None,
+        "agreement_metric": None,
+    },
+]
+
 
 class CLTRAnalyzer:
     def __init__(self, config: CLTRConfig):
@@ -109,6 +175,8 @@ class CLTRAnalyzer:
         condition_contrasts = self._condition_contrasts(cohort_phase, sample_status)
         mixed_effects_primary = self._mixed_effects_primary(cohort_phase, sample_status)
         predictive_benchmarks = self._predictive_benchmarks(session_primary_endpoints)
+        session_signal_audit = self._session_signal_audit(comparison_minute, sensor_agreement)
+        signal_audit_summary = self._signal_audit_summary(session_signal_audit)
         return {
             "cohort_minute_features": cohort_minute,
             "cohort_minute_comparison_window": comparison_minute,
@@ -121,6 +189,8 @@ class CLTRAnalyzer:
             "condition_support_summary": condition_support_summary,
             "sensor_agreement": sensor_agreement,
             "agreement_summary": self._agreement_summary(sensor_agreement),
+            "session_signal_audit": session_signal_audit,
+            "signal_audit_summary": signal_audit_summary,
             "condition_phase_summary": self._condition_phase_summary(cohort_phase),
             "condition_contrasts": condition_contrasts,
             "feature_associations": self._feature_associations(cohort_phase),
@@ -446,6 +516,227 @@ class CLTRAnalyzer:
                 }
             )
         return pd.DataFrame(rows)
+
+    @staticmethod
+    def _clip01(value: float) -> float:
+        if not np.isfinite(value):
+            return 0.0
+        return float(max(0.0, min(1.0, value)))
+
+    def _session_signal_audit(self, cohort_minute: pd.DataFrame, sensor_agreement: pd.DataFrame) -> pd.DataFrame:
+        if cohort_minute.empty:
+            return pd.DataFrame()
+        agreement_lookup: dict[tuple[str, str], pd.Series] = {}
+        if not sensor_agreement.empty:
+            for _, row in sensor_agreement.iterrows():
+                agreement_lookup[(str(row["session_id"]), str(row["metric"]))] = row
+        rows = []
+        for session_id, d in cohort_minute.groupby("session_id"):
+            total_minutes = int(len(d))
+            condition_code = str(d["condition_code"].iloc[0]) if "condition_code" in d.columns else ""
+            participant_id = str(d["participant_id"].iloc[0]) if "participant_id" in d.columns else ""
+            for spec in SENSOR_AUDIT_SPECS:
+                col = spec["column"]
+                if col not in d.columns:
+                    continue
+                vals = to_numeric(d[col])
+                observed = vals.dropna()
+                quality_col = spec.get("quality_column")
+                quality_fraction = float(to_numeric(d[quality_col]).mean()) if quality_col and quality_col in d.columns else np.nan
+                if spec.get("bounds"):
+                    low, high = spec["bounds"]
+                    plausible_mask = vals.between(low, high)
+                    plausible_fraction = float(plausible_mask.loc[vals.notna()].mean()) if observed.shape[0] else np.nan
+                    low_outliers = int((vals < low).sum()) if observed.shape[0] else 0
+                    high_outliers = int((vals > high).sum()) if observed.shape[0] else 0
+                else:
+                    plausible_fraction = quality_fraction if np.isfinite(quality_fraction) else float(observed.notna().mean()) if observed.shape[0] else np.nan
+                    low_outliers = 0
+                    high_outliers = 0
+                dif = observed.diff().abs().dropna()
+                agreement_metric = spec.get("agreement_metric")
+                agreement_row = agreement_lookup.get((str(session_id), str(agreement_metric))) if agreement_metric else None
+                rows.append(
+                    {
+                        "session_id": str(session_id),
+                        "participant_id": participant_id,
+                        "condition_code": condition_code,
+                        "signal_stream": spec["signal_stream"],
+                        "device": spec["device"],
+                        "construct": spec["construct"],
+                        "n_minutes_total": total_minutes,
+                        "n_valid_minutes": int(observed.shape[0]),
+                        "coverage_fraction": float(observed.shape[0] / total_minutes) if total_minutes else np.nan,
+                        "quality_fraction": quality_fraction,
+                        "plausible_fraction": plausible_fraction,
+                        "low_outlier_minutes": low_outliers,
+                        "high_outlier_minutes": high_outliers,
+                        "median_value": float(observed.median()) if not observed.empty else np.nan,
+                        "q05_value": float(observed.quantile(0.05)) if not observed.empty else np.nan,
+                        "q95_value": float(observed.quantile(0.95)) if not observed.empty else np.nan,
+                        "min_value": float(observed.min()) if not observed.empty else np.nan,
+                        "max_value": float(observed.max()) if not observed.empty else np.nan,
+                        "median_abs_step": float(dif.median()) if not dif.empty else np.nan,
+                        "p95_abs_step": float(dif.quantile(0.95)) if not dif.empty else np.nan,
+                        "paired_overlap_minutes": int(agreement_row["n_overlap_minutes"]) if agreement_row is not None and pd.notna(agreement_row.get("n_overlap_minutes")) else 0,
+                        "paired_eligible": int(agreement_row["eligible"]) if agreement_row is not None and pd.notna(agreement_row.get("eligible")) else 0,
+                        "paired_spearman_r": float(agreement_row["spearman_r"]) if agreement_row is not None and pd.notna(agreement_row.get("spearman_r")) else np.nan,
+                        "paired_mae": float(agreement_row["mae"]) if agreement_row is not None and pd.notna(agreement_row.get("mae")) else np.nan,
+                    }
+                )
+        out = pd.DataFrame(rows)
+        if out.empty:
+            return out
+        concern = []
+        for _, row in out.iterrows():
+            concern_score = (1.0 - self._clip01(float(row.get("coverage_fraction", np.nan)))) * 45.0
+            concern_score += (1.0 - self._clip01(float(row.get("plausible_fraction", np.nan)))) * 30.0
+            if np.isfinite(row.get("quality_fraction", np.nan)):
+                concern_score += (1.0 - self._clip01(float(row["quality_fraction"]))) * 20.0
+            if row.get("paired_eligible", 0) and np.isfinite(row.get("paired_spearman_r", np.nan)):
+                concern_score += max(0.0, min(15.0, (0.7 - float(row["paired_spearman_r"])) * 25.0))
+            concern.append(float(concern_score))
+        out["concern_score"] = concern
+        return out.sort_values(["construct", "device", "session_id"]).reset_index(drop=True)
+
+    def _signal_audit_summary(self, session_signal_audit: pd.DataFrame) -> pd.DataFrame:
+        if session_signal_audit.empty:
+            return pd.DataFrame()
+        rows = []
+        for (signal_stream, device, construct), d in session_signal_audit.groupby(["signal_stream", "device", "construct"]):
+            mean_quality = float(to_numeric(d["quality_fraction"]).mean()) if "quality_fraction" in d.columns and to_numeric(d["quality_fraction"]).notna().any() else np.nan
+            mean_plausible = float(to_numeric(d["plausible_fraction"]).mean()) if "plausible_fraction" in d.columns and to_numeric(d["plausible_fraction"]).notna().any() else np.nan
+            median_overlap = float(to_numeric(d["paired_overlap_minutes"]).median()) if "paired_overlap_minutes" in d.columns and to_numeric(d["paired_overlap_minutes"]).notna().any() else np.nan
+            median_spearman = float(to_numeric(d["paired_spearman_r"]).median()) if "paired_spearman_r" in d.columns and to_numeric(d["paired_spearman_r"]).dropna().any() else np.nan
+            median_mae = float(to_numeric(d["paired_mae"]).median()) if "paired_mae" in d.columns and to_numeric(d["paired_mae"]).dropna().any() else np.nan
+            mean_coverage = float(to_numeric(d["coverage_fraction"]).mean()) if to_numeric(d["coverage_fraction"]).notna().any() else np.nan
+            median_valid = float(to_numeric(d["n_valid_minutes"]).median()) if to_numeric(d["n_valid_minutes"]).notna().any() else np.nan
+            support_component = self._clip01(mean_coverage) * 35.0
+            plausibility_component = self._clip01(mean_plausible if np.isfinite(mean_plausible) else mean_quality) * 25.0
+            quality_component = self._clip01(mean_quality if np.isfinite(mean_quality) else mean_plausible) * 20.0
+            continuity_component = self._clip01((median_valid if np.isfinite(median_valid) else 0.0) / 30.0) * 10.0
+            agreement_component = 0.0
+            if np.isfinite(median_overlap):
+                agreement_component += self._clip01(median_overlap / float(self.config.runtime.min_sensor_overlap_minutes)) * 5.0
+            if np.isfinite(median_spearman):
+                agreement_component += self._clip01((median_spearman - 0.3) / 0.55) * 5.0
+            adequacy_score = float(support_component + plausibility_component + quality_component + continuity_component + agreement_component)
+            if construct == "heart_rate" and device == "Empatica":
+                if adequacy_score >= 70 and np.isfinite(median_overlap) and median_overlap >= 20 and np.isfinite(median_spearman) and median_spearman >= 0.8:
+                    adequacy_status = "usable_with_caution"
+                    recommended_role = "secondary_validation"
+                elif adequacy_score >= 45:
+                    adequacy_status = "limited"
+                    recommended_role = "subset_only"
+                else:
+                    adequacy_status = "weak"
+                    recommended_role = "not_primary"
+            elif adequacy_score >= 75:
+                adequacy_status = "strong"
+                recommended_role = "primary"
+            elif adequacy_score >= 60:
+                adequacy_status = "usable_with_caution"
+                recommended_role = "primary_with_qc"
+            elif adequacy_score >= 45:
+                adequacy_status = "limited"
+                recommended_role = "secondary_only"
+            else:
+                adequacy_status = "weak"
+                recommended_role = "not_recommended"
+            if construct in {"eda", "temperature"} and np.isfinite(median_spearman):
+                if median_spearman < 0.25:
+                    adequacy_status = "usable_with_caution" if adequacy_score >= 60 else adequacy_status
+                    recommended_role = "primary_with_qc" if adequacy_score >= 60 else recommended_role
+                elif median_spearman < 0.55 and recommended_role == "primary":
+                    adequacy_status = "usable_with_caution"
+                    recommended_role = "primary_with_qc"
+            concern_sessions = (
+                d.sort_values(["concern_score", "session_id"], ascending=[False, True])["session_id"].astype(str).head(3).tolist()
+            )
+            rows.append(
+                {
+                    "signal_stream": signal_stream,
+                    "device": device,
+                    "construct": construct,
+                    "n_sessions": int(d["session_id"].nunique()),
+                    "n_sessions_with_any_data": int((to_numeric(d["n_valid_minutes"]) > 0).sum()),
+                    "mean_valid_minutes": float(to_numeric(d["n_valid_minutes"]).mean()),
+                    "median_valid_minutes": median_valid,
+                    "mean_coverage_fraction": mean_coverage,
+                    "mean_quality_fraction": mean_quality,
+                    "mean_plausible_fraction": mean_plausible,
+                    "median_overlap_minutes": median_overlap,
+                    "median_spearman_r": median_spearman,
+                    "median_mae": median_mae,
+                    "max_concern_score": float(to_numeric(d["concern_score"]).max()) if to_numeric(d["concern_score"]).notna().any() else np.nan,
+                    "flagged_sessions": ", ".join(concern_sessions),
+                    "adequacy_score": adequacy_score,
+                    "adequacy_status": adequacy_status,
+                    "recommended_role": recommended_role,
+                    "scientific_reading": self._signal_scientific_reading(
+                        signal_stream=signal_stream,
+                        device=device,
+                        construct=construct,
+                        mean_coverage=mean_coverage,
+                        mean_plausible=mean_plausible,
+                        mean_quality=mean_quality,
+                        median_overlap=median_overlap,
+                        median_spearman=median_spearman,
+                        recommended_role=recommended_role,
+                    ),
+                }
+            )
+        order = {name: idx for idx, name in enumerate(["biopac_hr", "empatica_hr", "biopac_eda", "empatica_eda", "biopac_temp", "empatica_temp", "empatica_bvp"])}
+        out = pd.DataFrame(rows)
+        out["_order"] = out["signal_stream"].map(order).fillna(999)
+        out = out.sort_values(["_order", "device"]).drop(columns="_order").reset_index(drop=True)
+        return out
+
+    def _signal_scientific_reading(
+        self,
+        *,
+        signal_stream: str,
+        device: str,
+        construct: str,
+        mean_coverage: float,
+        mean_plausible: float,
+        mean_quality: float,
+        median_overlap: float,
+        median_spearman: float,
+        recommended_role: str,
+    ) -> str:
+        quality_piece = (
+            f"quality support is {mean_quality:.2f}"
+            if np.isfinite(mean_quality)
+            else f"plausibility support is {mean_plausible:.2f}" if np.isfinite(mean_plausible) else "quality is not estimable"
+        )
+        if construct == "heart_rate" and device == "Empatica":
+            if recommended_role == "secondary_validation":
+                return (
+                    f"{device} heart rate is physiologically plausible when present and can serve as a secondary validation stream; "
+                    f"however, its cohort support is partial (coverage {mean_coverage:.2f}, median overlap {median_overlap:.1f} min, median agreement {median_spearman:.2f})."
+                )
+            if recommended_role == "subset_only":
+                return (
+                    f"{device} heart rate is value-plausible but too incomplete for full-session inference; "
+                    f"{quality_piece}, median overlap is {median_overlap:.1f} min, and it should be restricted to subset or sensitivity analyses."
+                )
+            return (
+                f"{device} heart rate is not adequate as a primary endpoint in the current release: "
+                f"coverage is {mean_coverage:.2f}, {quality_piece}, and comparable overlap is too limited."
+            )
+        if recommended_role == "primary":
+            return f"{device} {construct.replace('_', ' ')} is complete and scientifically usable as a primary stream; coverage is {mean_coverage:.2f} and {quality_piece}."
+        if recommended_role == "primary_with_qc" and construct in {"eda", "temperature"} and np.isfinite(median_spearman):
+            return (
+                f"{device} {construct.replace('_', ' ')} is scientifically usable within-device, but cross-device comparability is limited "
+                f"(median agreement {median_spearman:.2f}); coverage is {mean_coverage:.2f} and it should be interpreted as a device-specific stream."
+            )
+        if recommended_role == "primary_with_qc":
+            return f"{device} {construct.replace('_', ' ')} is broadly usable but should be interpreted with session-level QC because coverage is {mean_coverage:.2f} and {quality_piece}."
+        if recommended_role == "secondary_only":
+            return f"{device} {construct.replace('_', ' ')} is usable mainly as a secondary stream; support is partial and cross-device comparability is limited."
+        return f"{device} {construct.replace('_', ' ')} is not yet strong enough for primary scientific interpretation in this release."
 
     def _condition_phase_summary(self, cohort_phase: pd.DataFrame) -> pd.DataFrame:
         if cohort_phase.empty:

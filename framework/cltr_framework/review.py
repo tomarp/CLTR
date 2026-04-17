@@ -59,6 +59,7 @@ def evaluate_report_quality(
     condition_contrasts = _safe_frame(analyzed, "condition_contrasts")
     sensor_agreement = _safe_frame(analyzed, "sensor_agreement")
     agreement_summary = _safe_frame(analyzed, "agreement_summary")
+    signal_audit_summary = _safe_frame(analyzed, "signal_audit_summary")
     feature_associations = _safe_frame(analyzed, "feature_associations")
     cohort_primary_endpoints = _safe_frame(analyzed, "cohort_primary_endpoints")
     pattern_summary = _safe_frame(analyzed, "pattern_summary")
@@ -108,6 +109,9 @@ def evaluate_report_quality(
 
     eligible_agreement = agreement_summary.loc[agreement_summary.get("summary_status", pd.Series(dtype=str)) == "eligible"].copy() if not agreement_summary.empty else pd.DataFrame()
     median_agreement = float(to_numeric(eligible_agreement.get("median_spearman_r", pd.Series(dtype=float))).median()) if not eligible_agreement.empty else np.nan
+    primary_streams = signal_audit_summary.loc[signal_audit_summary.get("recommended_role", pd.Series(dtype=str)).astype(str).isin(["primary", "primary_with_qc"]), "signal_stream"].astype(str).tolist() if not signal_audit_summary.empty else []
+    limited_streams = signal_audit_summary.loc[~signal_audit_summary.get("recommended_role", pd.Series(dtype=str)).astype(str).isin(["primary", "primary_with_qc"]), "signal_stream"].astype(str).tolist() if not signal_audit_summary.empty else []
+    mean_signal_score = float(to_numeric(signal_audit_summary.get("adequacy_score", pd.Series(dtype=float))).mean()) if not signal_audit_summary.empty else np.nan
 
     endpoint_cells = int(len(cohort_primary_endpoints))
     inferential_endpoint_cells = int((cohort_primary_endpoints.get("evidence_status", pd.Series(dtype=str)) == "inferential").sum()) if not cohort_primary_endpoints.empty else 0
@@ -150,10 +154,12 @@ def evaluate_report_quality(
     inference_score += 10.0 if np.isfinite(max_abs_dz) and max_abs_dz >= 0.5 else 0.0
     inference_score += 10.0 if inferential_endpoint_cells > 0 else 0.0
     inference_score += 10.0 if np.isfinite(median_agreement) and median_agreement >= 0.4 else 0.0
+    inference_score += 10.0 if np.isfinite(mean_signal_score) and mean_signal_score >= 65 else 0.0
     inference_evidence = [
         f"Eligible paired contrasts: {int(len(eligible_contrasts))}; nominally significant eligible contrasts: {int(len(significant_contrasts))}.",
         f"Maximum paired sample size: {max_pairs}; maximum absolute Cohen's dz: {_round_or_none(max_abs_dz, 3)}.",
         f"Eligible agreement summaries: {int(len(eligible_agreement))}; median eligible Spearman agreement: {_round_or_none(median_agreement, 3)}.",
+        f"Signal adequacy mean score: {_round_or_none(mean_signal_score, 3)}; primary streams: {', '.join(primary_streams) if primary_streams else 'none'}.",
     ]
     domains.append(_domain("Inferential Strength", inference_score, inference_evidence))
 
@@ -204,6 +210,8 @@ def evaluate_report_quality(
             "The generated report set is presentation-heavy; session narratives are repetitive and too dense for a journal-grade main story.",
         ]
     )
+    if limited_streams:
+        blockers.append(f"Several device streams remain secondary or limited rather than primary-grade, including: {', '.join(limited_streams[:6])}.")
     if sparse_features:
         blockers.append(f"Several analytic variables remain sparsely supported (<50% coverage), including: {', '.join(sparse_features[:6])}.")
 
@@ -216,6 +224,8 @@ def evaluate_report_quality(
         strengths.append("Within-subject paired contrasts are already wired into the analysis layer and can be upgraded into a stronger statistical workflow.")
     if not eligible_agreement.empty:
         strengths.append("Cross-device agreement is quantified rather than assumed, which is important for wearable-vs-lab credibility.")
+    if primary_streams:
+        strengths.append(f"The pipeline now distinguishes primary-grade versus limited device streams from cohort evidence; current primary streams include {', '.join(primary_streams[:4])}.")
 
     verdict = "not_phd_research_grade"
     if overall_score >= 80 and inferential_ok and len(eligible_contrasts) >= 8 and len(significant_contrasts) >= 2:

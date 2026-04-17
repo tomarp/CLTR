@@ -31,6 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("analyze", parents=[common])
     sub.add_parser("report", parents=[common])
     sub.add_parser("run-all", parents=[common])
+
     return parser
 
 

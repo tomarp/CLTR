@@ -10,13 +10,29 @@
     .page { width:min(100%, 1360px); margin:0 auto; padding:24px 28px 48px; box-sizing:border-box; }
     .primaryBar { position:sticky; top:0; z-index:24; backdrop-filter:blur(16px); background:rgba(248,250,252,0.92); border-bottom:1px solid rgba(148,163,184,0.18); }
     .primaryBarInner { width:min(100%, 1360px); margin:0 auto; padding:12px 28px; display:flex; align-items:center; justify-content:space-between; gap:16px; box-sizing:border-box; }
-    .logoLink { display:inline-flex; align-items:center; justify-content:center; width:120px; height:58px; text-decoration:none; }
+    .logoLink { display:inline-flex; align-items:center; gap:12px; min-height:58px; text-decoration:none; }
     .logoLink:hover { transform:translateY(-1px); }
-    .logoImage { width:100%; height:100%; object-fit:contain; display:block; }
+    .logoImage { width:58px; height:58px; object-fit:contain; display:block; flex-shrink:0; }
+    .logoWordmark { display:inline-flex; align-items:center; height:58px; font:700 2.1rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:-0.04em; color:#172033; }
     .mastheadActions { display:flex; align-items:center; gap:12px; flex-shrink:0; }
     .socialLinks { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
     .socialLink { display:inline-flex; align-items:center; justify-content:center; min-height:44px; padding:0 16px; border-radius:999px; text-decoration:none; color:#172033; background:linear-gradient(180deg,rgba(255,255,255,0.96) 0%,rgba(255,247,237,0.96) 100%); border:1px solid rgba(251,146,60,0.28); box-shadow:0 12px 28px rgba(23,32,51,0.08); font:700 0.92rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:0.01em; }
     .socialLink:hover { background:#ffffff; border-color:#fb923c; box-shadow:0 16px 34px rgba(23,32,51,0.12); transform:translateY(-1px); }
+    .themeToggle { appearance:none; width:44px; height:44px; border-radius:999px; border:1px solid rgba(148,163,184,0.24); background:linear-gradient(180deg,rgba(255,255,255,0.96) 0%,rgba(255,247,237,0.96) 100%); color:#172033; box-shadow:0 12px 28px rgba(23,32,51,0.08); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .themeToggle:hover { background:#ffffff; border-color:#fb923c; box-shadow:0 16px 34px rgba(23,32,51,0.12); transform:translateY(-1px); }
+    .themeToggleIconDark,.themeToggleIconLight { font-size:1.05rem; line-height:1; }
+    .themeToggleIconLight { display:none; }
+    body.theme-dark { color:#e5edf7; background:radial-gradient(circle at top left,#0f172a 0%,#111827 52%,#020617 100%); }
+    body.theme-dark .primaryBar { background:rgba(15,23,42,0.9); border-bottom-color:rgba(71,85,105,0.42); }
+    body.theme-dark .logoWordmark,body.theme-dark .title { color:#f8fafc; }
+    body.theme-dark .subtitle,body.theme-dark .leadText,body.theme-dark .introText,body.theme-dark .infoText { color:#cbd5e1; }
+    body.theme-dark .panel,body.theme-dark .introBlock,body.theme-dark .leadBlock { background:rgba(15,23,42,0.88); border-color:rgba(71,85,105,0.38); box-shadow:0 18px 44px rgba(2,6,23,0.38); }
+    body.theme-dark .socialLink,body.theme-dark .themeToggle { color:#f8fafc; background:linear-gradient(180deg,rgba(30,41,59,0.96) 0%,rgba(15,23,42,0.96) 100%); border-color:rgba(71,85,105,0.5); }
+    body.theme-dark .entrySwitch { background:rgba(30,41,59,0.5); border-color:rgba(71,85,105,0.4); }
+    body.theme-dark .entryOption { color:#e5edf7; background:rgba(255,255,255,0.06); border-color:rgba(71,85,105,0.35); }
+    body.theme-dark .entryOption.isPrimary { background:#f8fafc; color:#172033; }
+    body.theme-dark .themeToggleIconDark { display:none; }
+    body.theme-dark .themeToggleIconLight { display:inline; }
     .landing { display:grid; place-items:center; }
     .hero { width:min(100%, 1120px); display:grid; grid-template-columns:minmax(0,1fr); gap:18px; justify-items:center; text-align:center; }
     .panel { background:rgba(255,255,255,0.9); border:1px solid rgba(148,163,184,0.24); border-radius:22px; box-shadow:0 18px 44px rgba(23,32,51,0.08); padding:20px 22px; backdrop-filter:blur(8px); }
@@ -53,7 +69,9 @@
     .footerMarks { width:100%; display:flex; flex-wrap:nowrap; gap:14px; align-items:center; justify-content:space-between; }
     .footerMark { flex:1 1 0; display:flex; align-items:center; justify-content:center; min-width:0; }
     .footerMarkImage { width:100%; max-width:220px; height:clamp(52px, 7vw, 88px); object-fit:contain; display:block; }
-    @media (max-width:1000px) { .primaryBarInner { display:grid; padding:12px 20px; } .mastheadActions { justify-content:space-between; } .socialLinks { order:2; } .page { padding:20px 16px 40px; } .hero,.sectionGrid,.roleGrid,.introGrid { gap:16px; grid-template-columns:1fr; } .entrySwitch { width:100%; display:grid; border-radius:24px; } .entryOption { justify-content:flex-start; } .logoLink { width:104px; height:52px; } .footerMarks { gap:8px; } .footerMarkImage { height:clamp(40px, 9vw, 64px); } }
+    .copyrightNote { width:min(100%, 1360px); margin:0 auto; padding:0 clamp(16px,2.4vw,28px) 18px; box-sizing:border-box; text-align:center; color:#64748b; font:500 0.84rem/1.5 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body.theme-dark .copyrightNote { color:#94a3b8; }
+    @media (max-width:1000px) { .primaryBarInner { display:grid; padding:12px 20px; } .mastheadActions { justify-content:space-between; } .socialLinks { order:2; } .page { padding:20px 16px 40px; } .hero,.sectionGrid,.roleGrid,.introGrid { gap:16px; grid-template-columns:1fr; } .entrySwitch { width:100%; display:grid; border-radius:24px; } .entryOption { justify-content:flex-start; } .logoImage { width:52px; height:52px; } .logoWordmark { height:52px; font-size:1.9rem; } .footerMarks { gap:8px; } .footerMarkImage { height:clamp(40px, 9vw, 64px); } }
   </style>
 </head>
 <body class="reportKind--home">
@@ -61,6 +79,7 @@
     <div class="primaryBarInner">
       <a class="logoLink" href="./index.html" title="Open CLTR homepage" aria-label="Open CLTR homepage">
         <img class="logoImage" src="./assets/logos/cltr.png" alt="CLTR logo">
+        <span class="logoWordmark">CLTR</span>
       </a>
       <div class="mastheadActions">
         <div class="socialLinks">
@@ -69,6 +88,7 @@
           <a class="socialLink" href="https://doi.org/10.5281/zenodo.17817175" title="Open Zenodo" target="_blank" rel="noopener noreferrer"><span>Zenodo</span></a>
           <a class="socialLink" href="https://github.com/tomarp/cltr/tree/main/framework" title="Open Framework" target="_blank" rel="noopener noreferrer"><span>Framework</span></a>
         </div>
+        <button class="themeToggle" id="themeToggle" type="button" aria-label="Toggle dark mode"><span class="themeToggleIconDark" aria-hidden="true">◐</span><span class="themeToggleIconLight" aria-hidden="true">◑</span></button>
       </div>
     </div>
   </header>
@@ -77,11 +97,11 @@
       <section class="hero">
         <section class="panel heroLead">
           <h1 class="title">CLTR</h1>
-          <p class="subtitle">Chrono-Light Thermal Response is a collaborative research project focused on physiological adaptation, perceptual response, and behavioral regulation during warm indoor exposure under controlled variations in illuminance, diurnal timing, and airflow.</p>
+          <p class="subtitle">Chrono-Light Thermal Response is a collaborative research initiative that dissects the interplay between physiological adaptation, perceptual response, and behavioral regulation during warm indoor exposure, specifically isolating the effects of controlled variations in illuminance, diurnal timing, and airflow.</p>
           <div class="leadBlocks">
             <section class="leadBlock">
               <p class="leadLabel">Work Package</p>
-              <p class="leadText">CLTR provides the shared project framework for DC1 and DC2 within MUSIC, connecting experimental evidence, multimodal data, and analytical outputs in a form that supports both scientific understanding and future environmental practice.</p>
+              <p class="leadText">CLTR serves as the shared project framework for the EU Horizon MuSIC initiative, encompassing IRP1 and IRP2 research streams. It connects experimental evidence, multimodal datasets, and machine learning models with analytical outputs in ways that advance scientific understanding and inform future domain practice.</p>
             </section>
           </div>
           <div class="introGrid">
@@ -99,7 +119,7 @@
             </section>
           </div>
           <div class="entrySwitch" aria-label="Primary entry points">
-            <a class="entryOption isPrimary" href="./atlas/test_dataset/work/index.html">Atlas</a>
+          <a class="entryOption isPrimary" href="./atlas/index.html">Atlas</a>
             <a class="entryOption" href="./exp.html">Experiment</a>
           </div>
         </section>
@@ -117,11 +137,11 @@
         </section>
         <section class="roleGrid">
           <section class="panel roleCard">
-            <p class="roleCode">DC1</p>
+            <p class="roleCode">IRP1</p>
             <h2 class="roleTitle">Steady-state neurological reaction and perception</h2>
           </section>
           <section class="panel roleCard">
-            <p class="roleCode">DC2</p>
+            <p class="roleCode">IRP2</p>
             <h2 class="roleTitle">Acute dynamic physiological reaction and perception</h2>
           </section>
         </section>
@@ -136,5 +156,14 @@
       </section>
     </section>
   </main>
+  <div class="copyrightNote">&copy; 2026 Puneet Tomar. All rights reserved.</div>
 </body>
+<script>
+const themeToggle=document.getElementById('themeToggle');
+const storedTheme=window.localStorage.getItem('cltr-theme');
+if(storedTheme==='dark'){document.body.classList.add('theme-dark');}
+const syncThemeIcon=()=>{if(themeToggle){themeToggle.setAttribute('aria-pressed', document.body.classList.contains('theme-dark') ? 'true' : 'false');}};
+syncThemeIcon();
+if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classList.toggle('theme-dark');window.localStorage.setItem('cltr-theme', document.body.classList.contains('theme-dark') ? 'dark' : 'light');syncThemeIcon();});}
+</script>
 </html>

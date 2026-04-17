@@ -52,14 +52,10 @@ def parse_local_datetime(series: pd.Series, timezone: str) -> pd.Series:
 
 
 def parse_any_datetime(series: pd.Series, timezone: str) -> pd.Series:
-    dt = pd.to_datetime(series, errors="coerce", utc=True)
-    if dt.isna().all():
-        dt = pd.to_datetime(series, errors="coerce")
-        if getattr(dt.dt, "tz", None) is None:
-            dt = dt.dt.tz_localize(timezone).dt.tz_convert("UTC")
-        else:
-            dt = dt.dt.tz_convert("UTC")
-    return dt
+    dt = pd.to_datetime(series, errors="coerce")
+    if getattr(dt.dt, "tz", None) is None:
+        return dt.dt.tz_localize(timezone).dt.tz_convert("UTC")
+    return dt.dt.tz_convert("UTC")
 
 
 def minute_floor(series: pd.Series) -> pd.Series:

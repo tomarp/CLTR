@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
-import shutil
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -71,17 +70,10 @@ WORK_HOME_TITLE = "CLTR"
 WORK_HOME_SUBTITLE = "Controlled Laboratory Thermal Response"
 SESSION_CTA = "Open session report"
 COHORT_CTA = "Open cohort report"
+COPYRIGHT_NOTE = "&copy; 2026 Puneet Tomar. All rights reserved."
 PROJECT_GITHUB_URL = "https://github.com/tomarp/cltr"
 PROJECT_ZENODO_URL = "https://doi.org/10.5281/zenodo.17817175"
 PROJECT_FRAMEWORK_URL = "https://github.com/tomarp/cltr/tree/main/framework"
-WORK_LOGO_DIR = Path(__file__).resolve().parent.parent / "logos"
-WORK_HOME_LOGO_FILE = "cltr.png"
-WORK_FOOTER_LOGOS = [
-    ("La_Rochelle.png", "La Rochelle Universite"),
-    ("unipg.png", "UNIPG"),
-    ("music.png", "MUSIC Doctoral Network"),
-    ("eu_funding.png", "European Union"),
-]
 MAX_SESSION_MAIN_FIGURES = 5
 MAX_COHORT_MAIN_FIGURES = 5
 BLOCK_PHASE_NARRATIVE_THRESHOLD = 2
@@ -159,6 +151,20 @@ TABLE_COLUMN_LABELS = {
     "relationship_status": "Relationship Status",
     "phase_support_status": "Support Stability",
     "condition_support_status": "Condition Stability",
+    "signal_stream": "Signal Stream",
+    "device": "Device",
+    "construct": "Construct",
+    "n_sessions_with_any_data": "Sessions With Data",
+    "mean_valid_minutes": "Mean Valid Minutes",
+    "median_valid_minutes": "Median Valid Minutes",
+    "mean_coverage_fraction": "Mean Coverage",
+    "mean_quality_fraction": "Mean Quality",
+    "mean_plausible_fraction": "Mean Plausibility",
+    "adequacy_score": "Adequacy Score",
+    "adequacy_status": "Adequacy",
+    "recommended_role": "Recommended Role",
+    "flagged_sessions": "Flagged Sessions",
+    "max_concern_score": "Max Concern Score",
 }
 SESSION_STORY_METRICS = {
     "thermal_comfort": {"label": "comfort", "kind": "subjective", "scale": 1.0},
@@ -311,32 +317,12 @@ class ReportWriter:
 
     def write_all_sessions_index(self, manifest: pd.DataFrame, session_reports: list[dict], cohort_report: dict) -> dict:
         root = ensure_dir(self.outdir / self.o.report_dir / self.o.work_dir)
-        self._copy_work_logo_assets(root)
         index_path = root / "index.html"
         atlas_path = root / "cltr_atlas.html"
         atlas_html = self._all_sessions_html(manifest, session_reports, cohort_report)
         index_path.write_text(atlas_html, encoding="utf-8")
         atlas_path.write_text(atlas_html, encoding="utf-8")
         return {"html_path": str(index_path), "atlas_path": str(atlas_path)}
-
-    def _copy_work_logo_assets(self, root: Path) -> None:
-        asset_dir = ensure_dir(root / "assets" / "logos")
-        for logo_name in {WORK_HOME_LOGO_FILE, *(name for name, _ in WORK_FOOTER_LOGOS)}:
-            source = WORK_LOGO_DIR / logo_name
-            if source.exists():
-                shutil.copy2(source, asset_dir / logo_name)
-
-    def _logo_paths(self, depth: str) -> dict[str, str]:
-        prefixes = {
-            "work": "assets/logos",
-            "cohort": "../../work/assets/logos",
-            "session": "../../../work/assets/logos",
-        }
-        prefix = prefixes[depth]
-        return {
-            "home": f"{prefix}/{WORK_HOME_LOGO_FILE}",
-            "footer": {name: f"{prefix}/{name}" for name, _ in WORK_FOOTER_LOGOS},
-        }
 
     def _style(self) -> None:
         plt.rcParams.update(
@@ -367,9 +353,10 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
 .page {{ width:min(100%, {ui['page_max_width']}); margin:0 auto; padding:24px clamp(16px,2.4vw,28px) 48px; box-sizing:border-box; }}
 .primaryBar {{ position:sticky; top:0; z-index:24; backdrop-filter:blur(16px); background:rgba(248,250,252,0.92); border-bottom:1px solid rgba(148,163,184,0.18); }}
 .primaryBarInner {{ width:min(100%, {ui['page_max_width']}); margin:0 auto; padding:12px clamp(16px,2.4vw,28px); display:flex; align-items:center; justify-content:space-between; gap:16px; box-sizing:border-box; }}
-.logoLink {{ display:inline-flex; align-items:center; justify-content:center; width:120px; height:58px; text-decoration:none; }}
+.logoLink {{ display:inline-flex; align-items:center; gap:12px; min-height:58px; text-decoration:none; }}
 .logoLink:hover {{ transform:translateY(-1px); }}
-.logoImage {{ width:100%; height:100%; object-fit:contain; display:block; }}
+.logoMark {{ width:58px; height:58px; display:block; flex-shrink:0; }}
+.logoWordmark {{ display:inline-flex; align-items:center; height:58px; font:700 2.1rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:-0.04em; color:#172033; }}
 .secondaryBar {{ position:sticky; top:71px; z-index:23; backdrop-filter:blur(14px); background:rgba(255,255,255,0.78); border-bottom:1px solid rgba(148,163,184,0.16); }}
 .secondaryBarInner {{ width:min(100%, {ui['page_max_width']}); margin:0 auto; padding:10px clamp(16px,2.4vw,28px); display:flex; align-items:center; justify-content:space-between; gap:14px; box-sizing:border-box; }}
 .secondaryBarMeta {{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size:0.84rem; color:#475569; }}
@@ -386,6 +373,23 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
 .socialLink {{ display:inline-flex; align-items:center; justify-content:center; min-height:44px; padding:0 16px; border-radius:999px; text-decoration:none; color:#172033; background:linear-gradient(180deg,rgba(255,255,255,0.96) 0%,rgba(255,247,237,0.96) 100%); border:1px solid rgba(251,146,60,0.28); box-shadow:0 12px 28px rgba(23,32,51,0.08); font:700 0.92rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:0.01em; }}
 .socialLink:hover {{ background:#ffffff; border-color:#fb923c; box-shadow:0 16px 34px rgba(23,32,51,0.12); transform:translateY(-1px); }}
 .socialLink.isDisabled {{ pointer-events:none; opacity:0.58; }}
+.themeToggle {{ appearance:none; width:44px; height:44px; border-radius:999px; border:1px solid rgba(148,163,184,0.24); background:linear-gradient(180deg,rgba(255,255,255,0.96) 0%,rgba(255,247,237,0.96) 100%); color:#172033; box-shadow:0 12px 28px rgba(23,32,51,0.08); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }}
+.themeToggle:hover {{ background:#ffffff; border-color:#fb923c; box-shadow:0 16px 34px rgba(23,32,51,0.12); transform:translateY(-1px); }}
+.themeToggleIconDark,.themeToggleIconLight {{ font-size:1.05rem; line-height:1; }}
+.themeToggleIconLight {{ display:none; }}
+body.theme-dark {{ color:#e5edf7; background:radial-gradient(circle at top left,#0f172a 0%,#111827 52%,#020617 100%); }}
+body.theme-dark .primaryBar {{ background:rgba(15,23,42,0.9); border-bottom-color:rgba(71,85,105,0.42); }}
+body.theme-dark .secondaryBar {{ background:rgba(15,23,42,0.82); border-bottom-color:rgba(71,85,105,0.32); }}
+body.theme-dark .logoWordmark,body.theme-dark .secondaryBarType,body.theme-dark .title,body.theme-dark .sectionTitle,body.theme-dark th {{ color:#f8fafc; }}
+body.theme-dark .secondaryBarText,body.theme-dark .label,body.theme-dark .meta,body.theme-dark .figureMeta,body.theme-dark .caption,body.theme-dark .subtitle,body.theme-dark .takeawayText,body.theme-dark td,body.theme-dark .nav a span {{ color:#cbd5e1; }}
+body.theme-dark .panel,body.theme-dark .figurePanel,body.theme-dark .tablePanel,body.theme-dark .card,body.theme-dark .takeawayItem,body.theme-dark .takeawayLead {{ background:rgba(15,23,42,0.88); border-color:rgba(71,85,105,0.38); box-shadow:0 18px 44px rgba(2,6,23,0.38); }}
+body.theme-dark .socialLink,body.theme-dark .themeToggle,body.theme-dark .menuButton {{ color:#f8fafc; background:linear-gradient(180deg,rgba(30,41,59,0.96) 0%,rgba(15,23,42,0.96) 100%); border-color:rgba(71,85,105,0.5); }}
+body.theme-dark .menuPanel {{ background:rgba(15,23,42,0.96); border-color:rgba(71,85,105,0.4); }}
+body.theme-dark .nav a {{ color:#f8fafc; background:rgba(30,41,59,0.96); border-color:rgba(71,85,105,0.44); box-shadow:inset 0 0 0 4px rgba(15,23,42,0.75); }}
+body.theme-dark table th {{ background:#1e293b; }}
+body.theme-dark .figureImage,body.theme-dark .lightbox img {{ background:#e2e8f0; }}
+body.theme-dark .themeToggleIconDark {{ display:none; }}
+body.theme-dark .themeToggleIconLight {{ display:inline; }}
 .menuButton {{ appearance:none; border:1px solid rgba(148,163,184,0.28); background:rgba(255,255,255,0.88); color:#172033; border-radius:999px; padding:10px 14px; display:inline-flex; align-items:center; gap:10px; font:600 0.82rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; cursor:pointer; box-shadow:0 10px 24px rgba(23,32,51,0.08); }}
 .menuButton:hover {{ background:#ffffff; border-color:#cbd5e1; }}
 .menuButtonBars {{ display:grid; gap:3px; }}
@@ -454,6 +458,8 @@ th {{ color:#334155; background:#f8fafc; }}
 .lightbox {{ position:fixed; inset:0; background:rgba(15,23,42,0.86); display:none; align-items:center; justify-content:center; padding:30px; z-index:30; }}
 .lightbox.open {{ display:flex; }}
 .lightbox img {{ max-width:95vw; max-height:90vh; background:white; border-radius:{ui['card_radius']}; }}
+.copyrightNote {{ width:min(100%, {ui['page_max_width']}); margin:0 auto; padding:0 clamp(16px,2.4vw,28px) 18px; box-sizing:border-box; text-align:center; color:#64748b; font:500 0.84rem/1.5 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }}
+body.theme-dark .copyrightNote {{ color:#94a3b8; }}
 @media (max-width:1280px) {{ .reportShell {{ grid-template-columns:1fr; }} }}
 @media (max-width:{ui['mobile_breakpoint']}) {{ .primaryBarInner,.secondaryBarInner,.hero,.tableGrid {{ grid-template-columns:1fr; }} .primaryBarInner,.secondaryBarInner {{ display:grid; padding:12px 20px; }} .mastheadActions,.secondaryBarActions {{ justify-content:space-between; }} .secondaryBarText {{ white-space:normal; }} .page {{ padding:20px 16px 40px; }} .nav a {{ grid-template-columns:auto minmax(0,1fr); }} .menuPanel {{ right:auto; left:0; width:min(100%, 420px); }} .takeawayHeader {{ align-items:start; }} .socialLinks {{ order:2; }} }}
 """.strip()
@@ -465,9 +471,10 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
 .page {{ width:min(100%, {ui['page_max_width']}); margin:0 auto; padding:{ui['index_page_padding']}; box-sizing:border-box; }}
 .primaryBar {{ position:sticky; top:0; z-index:24; backdrop-filter:blur(16px); background:rgba(248,250,252,0.92); border-bottom:1px solid rgba(148,163,184,0.18); }}
 .primaryBarInner {{ width:min(100%, {ui['page_max_width']}); margin:0 auto; padding:12px 28px; display:flex; align-items:center; justify-content:space-between; gap:16px; box-sizing:border-box; }}
-.logoLink {{ display:inline-flex; align-items:center; justify-content:center; width:120px; height:58px; text-decoration:none; }}
+.logoLink {{ display:inline-flex; align-items:center; gap:12px; min-height:58px; text-decoration:none; }}
 .logoLink:hover {{ transform:translateY(-1px); }}
-.logoImage {{ width:100%; height:100%; object-fit:contain; display:block; }}
+.logoMark {{ width:58px; height:58px; display:block; flex-shrink:0; }}
+.logoWordmark {{ display:inline-flex; align-items:center; height:58px; font:700 2.1rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:-0.04em; color:#172033; }}
 .secondaryBar {{ position:sticky; top:71px; z-index:23; backdrop-filter:blur(14px); background:rgba(255,255,255,0.78); border-bottom:1px solid rgba(148,163,184,0.16); }}
 .secondaryBarInner {{ width:min(100%, {ui['page_max_width']}); margin:0 auto; padding:10px 28px; display:flex; align-items:center; justify-content:space-between; gap:14px; box-sizing:border-box; }}
 .secondaryBarMeta {{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size:0.84rem; color:#475569; }}
@@ -480,6 +487,22 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
 .socialLink {{ display:inline-flex; align-items:center; justify-content:center; min-height:44px; padding:0 16px; border-radius:999px; text-decoration:none; color:#172033; background:linear-gradient(180deg,rgba(255,255,255,0.96) 0%,rgba(255,247,237,0.96) 100%); border:1px solid rgba(251,146,60,0.28); box-shadow:0 12px 28px rgba(23,32,51,0.08); font:700 0.92rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:0.01em; }}
 .socialLink:hover {{ background:#ffffff; border-color:#fb923c; box-shadow:0 16px 34px rgba(23,32,51,0.12); transform:translateY(-1px); }}
 .socialLink.isDisabled {{ pointer-events:none; opacity:0.58; }}
+.themeToggle {{ appearance:none; width:44px; height:44px; border-radius:999px; border:1px solid rgba(148,163,184,0.24); background:linear-gradient(180deg,rgba(255,255,255,0.96) 0%,rgba(255,247,237,0.96) 100%); color:#172033; box-shadow:0 12px 28px rgba(23,32,51,0.08); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }}
+.themeToggle:hover {{ background:#ffffff; border-color:#fb923c; box-shadow:0 16px 34px rgba(23,32,51,0.12); transform:translateY(-1px); }}
+.themeToggleIconDark,.themeToggleIconLight {{ font-size:1.05rem; line-height:1; }}
+.themeToggleIconLight {{ display:none; }}
+body.theme-dark {{ color:#e5edf7; background:radial-gradient(circle at top left,#0f172a 0%,#111827 52%,#020617 100%); }}
+body.theme-dark .primaryBar {{ background:rgba(15,23,42,0.9); border-bottom-color:rgba(71,85,105,0.42); }}
+body.theme-dark .secondaryBar {{ background:rgba(15,23,42,0.82); border-bottom-color:rgba(71,85,105,0.32); }}
+body.theme-dark .logoWordmark,body.theme-dark .secondaryBarType,body.theme-dark .title,body.theme-dark .heroCta .subtitle,body.theme-dark .heroCta .eyebrow {{ color:#f8fafc; }}
+body.theme-dark .secondaryBarText,body.theme-dark .subtitle,body.theme-dark .tagLine,body.theme-dark .heroStatement,body.theme-dark .heroFactValue {{ color:#cbd5e1; }}
+body.theme-dark .panel,body.theme-dark .sessionCard,body.theme-dark .heroFact {{ background:rgba(15,23,42,0.88); border-color:rgba(71,85,105,0.38); box-shadow:0 18px 44px rgba(2,6,23,0.38); }}
+body.theme-dark .heroIntro,body.theme-dark .heroCta {{ background:linear-gradient(135deg,#0f172a 0%,#1e293b 52%,#334155 100%); border-color:rgba(71,85,105,0.4); }}
+body.theme-dark .socialLink,body.theme-dark .themeToggle,body.theme-dark .menuButton {{ color:#f8fafc; background:linear-gradient(180deg,rgba(30,41,59,0.96) 0%,rgba(15,23,42,0.96) 100%); border-color:rgba(71,85,105,0.5); }}
+body.theme-dark .menuPanel {{ background:rgba(15,23,42,0.96); border-color:rgba(71,85,105,0.4); }}
+body.theme-dark .nav a {{ color:#f8fafc; background:rgba(30,41,59,0.96); border-color:rgba(71,85,105,0.44); box-shadow:inset 0 0 0 4px rgba(15,23,42,0.75); }}
+body.theme-dark .themeToggleIconDark {{ display:none; }}
+body.theme-dark .themeToggleIconLight {{ display:inline; }}
 .mastheadActions {{ display:flex; align-items:center; gap:12px; flex-shrink:0; }}
 .menuButton {{ appearance:none; border:1px solid rgba(148,163,184,0.28); background:rgba(255,255,255,0.88); color:#172033; border-radius:999px; padding:10px 14px; display:inline-flex; align-items:center; gap:10px; font:600 0.82rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; cursor:pointer; box-shadow:0 10px 24px rgba(23,32,51,0.08); }}
 .menuButton:hover {{ background:#ffffff; border-color:#cbd5e1; }}
@@ -519,9 +542,8 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
 @media (max-width:{ui['index_mobile_breakpoint']}) {{ .primaryBarInner,.secondaryBarInner,.hero,.grid,.heroFacts {{ grid-template-columns:1fr; }} .primaryBarInner,.secondaryBarInner {{ display:grid; padding:12px 20px; }} .mastheadActions,.secondaryBarActions {{ justify-content:space-between; }} .secondaryBarText {{ white-space:normal; }} .menuPanel {{ right:auto; left:0; width:min(100%, 420px); }} .heroSticky {{ position:static; }} .socialLinks {{ order:2; }} }}
 """.strip()
 
-    def _social_links_html(self, *, publication_href: str) -> str:
+    def _social_links_html(self) -> str:
         links = [
-            ("Publication", publication_href),
             ("GitHub", PROJECT_GITHUB_URL),
             ("Zenodo", PROJECT_ZENODO_URL),
             ("Framework", PROJECT_FRAMEWORK_URL),
@@ -534,8 +556,6 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
             title = f"{label} link unavailable" if disabled else f"Open {label}"
             if disabled:
                 attrs = " aria-disabled='true'"
-            elif label == "Publication":
-                attrs = ""
             else:
                 attrs = " target='_blank' rel='noopener noreferrer'"
             items.append(
@@ -568,8 +588,6 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
         self,
         *,
         home_href: str,
-        publication_href: str,
-        logo_src: str,
         page_type: str,
         page_meta: str,
         menu_button_id: str,
@@ -596,24 +614,23 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
         return (
             f"<header class='primaryBar'>"
             f"<div class='primaryBarInner'>"
-            f"<a class='logoLink' href='{html_escape(home_href)}' title='Open CLTR homepage' aria-label='Open CLTR homepage'><img class='logoImage' src='{html_escape(logo_src)}' alt='CLTR logo'/></a>"
+            f"<a class='logoLink' href='{html_escape(home_href)}' title='Open report index' aria-label='Open report index'>{self._logo_image_svg()}<span class='logoWordmark'>CLTR</span></a>"
             f"<div class='mastheadActions'>"
-            f"{self._social_links_html(publication_href=publication_href)}"
+            f"{self._social_links_html()}"
+            f"<button class='themeToggle' id='themeToggle' type='button' aria-label='Toggle dark mode'><span class='themeToggleIconDark' aria-hidden='true'>◐</span><span class='themeToggleIconLight' aria-hidden='true'>◑</span></button>"
             f"</div>"
             f"</div>"
             f"</header>"
             f"{secondary_html}"
         )
 
-    def _home_footer_logos_html(self, footer_logo_paths: dict[str, str]) -> str:
-        marks = []
-        for logo_name, label in WORK_FOOTER_LOGOS:
-            marks.append(
-                f"<div class='footerMark'>"
-                f"<img class='footerMarkImage' src='{html_escape(footer_logo_paths[logo_name])}' alt='{html_escape(label)} logo'/>"
-                f"</div>"
-            )
-        return f"<div class='footerMarks'>{''.join(marks)}</div>"
+    def _theme_toggle_script(self) -> str:
+        return """const themeToggle=document.getElementById('themeToggle');
+const storedTheme=window.localStorage.getItem('cltr-theme');
+if(storedTheme==='dark'){document.body.classList.add('theme-dark');}
+const syncThemeIcon=()=>{if(themeToggle){themeToggle.setAttribute('aria-pressed', document.body.classList.contains('theme-dark') ? 'true' : 'false');}};
+syncThemeIcon();
+if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classList.toggle('theme-dark');window.localStorage.setItem('cltr-theme', document.body.classList.contains('theme-dark') ? 'dark' : 'light');syncThemeIcon();});}"""
 
     def _home_page_css(self) -> str:
         ui = REPORT_UI
@@ -627,24 +644,19 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
 .heroLead .eyebrow {{ color:#dbeafe; }}
 .heroLead .title,.heroLead .subtitle {{ color:#f8fafc; }}
 .heroLead .subtitle {{ max-width:58ch; margin:0 auto; }}
-.heroVisual {{ width:min(100%, 860px); border-radius:28px; border:1px solid rgba(219,234,254,0.34); background:rgba(255,255,255,0.14); box-shadow:inset 0 1px 0 rgba(255,255,255,0.2); padding:20px; margin-top:20px; }}
-.heroVisualImage {{ width:100%; height:auto; display:block; object-fit:contain; }}
-.homeFooter {{ width:min(100%, 1040px); display:grid; gap:0; justify-items:center; padding:20px 22px; }}
-.footerMarks {{ width:100%; display:flex; flex-wrap:nowrap; gap:14px; align-items:center; justify-content:space-between; }}
-.footerMark {{ flex:1 1 0; display:flex; align-items:center; justify-content:center; min-width:0; }}
-.footerMarkImage {{ width:100%; max-width:220px; height:clamp(52px, 7vw, 88px); object-fit:contain; display:block; }}
-@media (max-width:{ui['mobile_breakpoint']}) {{ .hero {{ gap:16px; }} .heroVisual {{ padding:16px; }} .footerMarks {{ gap:8px; }} .footerMarkImage {{ height:clamp(40px, 9vw, 64px); }} }}
+.heroVisual {{ width:min(100%, 860px); border-radius:28px; border:1px solid rgba(219,234,254,0.34); background:rgba(255,255,255,0.14); box-shadow:inset 0 1px 0 rgba(255,255,255,0.2); padding:24px; margin-top:20px; display:grid; justify-items:center; gap:14px; }}
+.heroVisual .logoMark {{ width:min(220px, 42vw); height:auto; }}
+.heroVisualText {{ margin:0; max-width:46ch; font:500 1rem/1.6 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color:#e2e8f0; }}
+.copyrightNote {{ padding-bottom:18px; }}
+@media (max-width:{ui['mobile_breakpoint']}) {{ .hero {{ gap:16px; }} .heroVisual {{ padding:16px; }} }}
 """.strip()
 
     def _home_html(self, manifest: pd.DataFrame, session_reports: list[dict], cohort_report: dict) -> str:
         cohort_name = Path(cohort_report["html_path"]).name if cohort_report.get("html_path") else "cohort_report.html"
-        logo_paths = self._logo_paths("work")
         chrome = self._shared_chrome(
             home_href="index.html",
-            publication_href="publication.html",
-            logo_src=logo_paths["home"],
             page_type="Home",
-            page_meta="Project homepage for the CLTR study",
+            page_meta="Report index for the CLTR study",
             menu_button_id="homeMenuButton",
             menu_panel_id="homeMenuPanel",
             menu_label="Navigate",
@@ -661,7 +673,7 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
         return f"""<!doctype html><html><head><meta charset='utf-8'><title>{WORK_HOME_TITLE}</title>
 <style>
 {self._home_page_css()}
-</style></head><body class='reportKind--home'>{chrome}<main class='page'><section class='landing'><section class='hero'><section class='panel heroLead'><div class='eyebrow'>Project Homepage</div><h1 class='title'>{WORK_HOME_TITLE}</h1><p class='subtitle'>{WORK_HOME_SUBTITLE}. A project homepage for the CLTR study, with the atlas as the analytical entry point and the framework maintained as a separate software repository.</p><div class='heroVisual'><img class='heroVisualImage' src='{html_escape(logo_paths["home"])}' alt='CLTR project logo'/></div></section><footer class='panel homeFooter'>{self._home_footer_logos_html(logo_paths["footer"])}</footer></section></section></main><script>
+</style></head><body class='reportKind--home'>{chrome}<main class='page'><section class='landing'><section class='hero'><section class='panel heroLead'><div class='eyebrow'>Report Index</div><h1 class='title'>{WORK_HOME_TITLE}</h1><p class='subtitle'>{WORK_HOME_SUBTITLE}. Framework outputs are generated here first, and the atlas bundle can then be published separately from these report artifacts.</p><div class='heroVisual'>{self._logo_image_svg()}<p class='heroVisualText'>This workspace contains the generated CLTR report bundle only. Public-site pages and publication assets are maintained separately under <code>work/cltr/docs</code>.</p></div></section></section></section></main><div class='copyrightNote'>{COPYRIGHT_NOTE}</div><script>
 </script></body></html>"""
 
     def _spec(self, *, code: str, stem: str, title: str, summary: str, fig, tags: list[str], evidence_score: int, evidence_label: str, gating_note: str = "", phase_focus: str = "all", section: str = "results") -> dict:
@@ -702,21 +714,16 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
         return spec
 
     def _figure_caption_note(self, *, title: str, summary: str, tags: list[str]) -> str:
-        tag_set = {str(tag).strip().lower() for tag in tags}
-        title_lower = str(title).lower()
-        summary_lower = str(summary).lower()
+        title_text = str(title)
+        summary_text = str(summary)
+        title_lower = title_text.lower()
+        summary_lower = summary_text.lower()
         notes: list[str] = []
-        uses_phase_abbr = (
-            bool(tag_set & {"phase", "agreement"})
-            or {"overview", "support"}.issubset(tag_set)
-            or "phase map" in summary_lower
-            or "block and phase" in title_lower
-            or "support map" in title_lower
-            or "timeline" in summary_lower
-        )
+        phase_abbr_pattern = re.compile(r"\b(?:ACC|FCS|SR|FFC|SS|OC)\b")
+        uses_phase_abbr = bool(phase_abbr_pattern.search(title_text) or phase_abbr_pattern.search(summary_text))
         if uses_phase_abbr:
             notes.append(PHASE_ABBR_CAPTION)
-        uses_acc_assumption = "acc*" in summary or "acc-assumed" in summary_lower or "baseline" in summary_lower
+        uses_acc_assumption = bool(re.search(r"\bACC\*\b", summary_text)) or "acc-assumed" in summary_lower
         if uses_acc_assumption:
             notes.append(ACC_ASSUMPTION_CAPTION)
         return " ".join(notes)
@@ -749,6 +756,27 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
             width = end - start
             if width >= 7:
                 ax.text((start + end) / 2.0, 1.01, PHASE_ABBR.get(phase, phase[:3].upper()), transform=ax.get_xaxis_transform(), ha="center", va="bottom", fontsize=8, color="#475569")
+
+    def _place_condition_legend(self, ax: plt.Axes, handles=None) -> None:
+        labels = []
+        if handles is None:
+            handles, labels = ax.get_legend_handles_labels()
+        else:
+            labels = [getattr(handle, "get_label", lambda: "")().strip() for handle in handles]
+        labels = [label for label in labels if label]
+        if not labels:
+            return
+        ncols = min(len(labels), len(CONDITION_ORDER))
+        ax.legend(
+            handles=handles,
+            frameon=False,
+            ncol=ncols,
+            loc="upper center",
+            bbox_to_anchor=(0.5, 1.14),
+            columnspacing=1.2,
+            handletextpad=0.5,
+            borderaxespad=0.0,
+        )
 
 
     def _session_window_utc(self, minute: pd.DataFrame) -> tuple[pd.Timestamp | None, pd.Timestamp | None]:
@@ -2916,8 +2944,8 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
             self._spec(
                 code="C02",
                 stem="cohort_design_support",
-                title="Cohort support diagnostics",
-                summary="This panel summarizes session balance, modality support, and data completeness without forcing large-cohort displays when the cohort is small.",
+                title="Session-type cohort synopsis",
+                summary="The cohort is summarized at the session-type level so condition balance, factor balance, and support across the main acquisition streams can be read before inferential results are interpreted.",
                 fig=self._fig_cohort_design(c),
                 tags=["overview", "support", "qc"],
                 evidence_score=ev["score"],
@@ -2928,8 +2956,8 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
             self._spec(
                 code="C03",
                 stem="cohort_window_validation",
-                title="Comparison-window validation by condition",
-                summary="Condition-level questionnaire completeness, device coverage, and paired-device overlap are summarized together so the cohort comparison window is validated before measured trends are read.",
+                title="Paired-device validation profile",
+                summary="Paired-device validation is separated from session structure so overlap, eligibility, and agreement can be assessed directly for heart rate, electrodermal activity, and temperature.",
                 fig=self._fig_cohort_window_validation(c),
                 tags=["overview", "qc", "support", "agreement"],
                 evidence_score=ev["score"],
@@ -2941,8 +2969,8 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
                 code="C04",
                 stem="cohort_support_map",
                 title="Phase-annotated cohort support map",
-                summary="Support is aggregated by condition and minute across Blocks 1 to 3 so phase-annotated validation windows remain visible before cohort trajectories and derived summaries are interpreted.",
-                fig=self._fig_cohort_support_map(c.get("cohort_minute_comparison_window", c.get("cohort_minute_features", pd.DataFrame()))),
+                summary="Support is aggregated by condition and minute across the full protocol timeline so acclimation, intervention, and terminal phases remain visible before cohort trajectories and derived summaries are interpreted.",
+                fig=self._fig_cohort_support_map(c.get("cohort_minute_features", c.get("cohort_minute_comparison_window", pd.DataFrame()))),
                 tags=["overview", "qc", "support", "phase"],
                 evidence_score=ev["score"],
                 evidence_label=ev["label"],
@@ -3735,9 +3763,9 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
             return None
         fig, axes = plt.subplots(1, 3, figsize=self._figsize("three_panel_row_wide"))
         fig._cltr_panel_notes = [
-            "Left shows minute-level retention by source.",
-            "Center shows overlap burden as a share of the session.",
-            "Right shows phase-wise modality coverage across Blocks 1 to 3.",
+            "Left|Retention by source|Minute-level retention by source.",
+            "Center|Overlap burden|Overlap burden as a share of the session.",
+            "Right|Phase-wise coverage|Phase-wise modality coverage across Blocks 1 to 3.",
         ]
         support = meta.get("support", {})
         session_len = max(int(meta.get("n_minutes_comparison_window", 0)), 1)
@@ -3830,8 +3858,8 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
             return None
         fig, axes = plt.subplots(1, 2, figsize=(13.6, 4.9), gridspec_kw={"width_ratios": [1.2, 0.8]})
         fig._cltr_panel_notes = [
-            "Left shows contiguous support segments by modality across Blocks 1 to 3.",
-            "Right shows contiguous overlap segments between paired devices across Blocks 1 to 3.",
+            "Left|Support segments|Contiguous support segments by modality across Blocks 1 to 3.",
+            "Right|Paired-device overlap segments|Contiguous overlap segments between paired devices across Blocks 1 to 3.",
         ]
         for ax, data in [(axes[0], left), (axes[1], right)]:
             if data.empty:
@@ -4200,51 +4228,134 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
         session_summary = c["session_summary"]
         if session_summary.empty:
             return None
-        fig, axes = plt.subplots(2, 2, figsize=(12.5, 8))
-        cond_counts = session_summary["condition_code"].value_counts().reindex(CONDITION_ORDER).dropna()
-        axes[0, 0].bar(cond_counts.index, cond_counts.values, color=[CONDITION_COLORS.get(x, "#475569") for x in cond_counts.index])
-        vals = [
-            float(session_summary["questionnaire_completeness"].mean()),
-            float(session_summary["empatica_fraction"].mean()),
-            float(session_summary["biopac_fraction"].mean()),
-            float(session_summary["indoor_fraction"].mean()),
+        cond_order = [x for x in CONDITION_ORDER if x in session_summary["condition_code"].astype(str).unique()]
+        if not cond_order:
+            cond_order = sorted(session_summary["condition_code"].astype(str).dropna().unique().tolist())
+        fig, axes = plt.subplots(
+            1,
+            3,
+            figsize=(16.8, 4.9),
+            gridspec_kw={"width_ratios": [1.0, 1.0, 1.0], "wspace": 0.34},
+            constrained_layout=True,
+        )
+
+        cond_counts = (
+            session_summary["condition_code"]
+            .astype(str)
+            .value_counts()
+            .reindex(cond_order)
+            .fillna(0)
+            .astype(int)
+        )
+        bars = axes[0].bar(
+            cond_counts.index,
+            cond_counts.values,
+            color=[CONDITION_COLORS.get(x, "#475569") for x in cond_counts.index],
+            width=0.68,
+        )
+        axes[0].set_ylabel("Sessions")
+        axes[0].set_ylim(0, max(float(cond_counts.max()) * 1.22, 1.0))
+        axes[0].tick_params(axis="x", rotation=0)
+
+        factor_counts = [
+            ("Illuminance", session_summary["illuminance_level"].astype(str).value_counts().reindex(["DIM", "BRI"]).fillna(0)),
+            ("Diurnal timing", session_summary["time_of_day"].astype(str).value_counts().reindex(["MOR", "MID"]).fillna(0)),
         ]
-        axes[0, 1].bar(["Questionnaire", "Empatica", "BIOPAC", "Indoor"], vals, color=["#111827", "#2563eb", "#dc2626", "#059669"])
-        axes[0, 1].set_ylim(0, 1)
-        cov = c["coverage_summary"].head(8)
-        axes[1, 0].barh(cov["feature"], cov["coverage_fraction"], color="#0f766e")
-        axes[1, 0].invert_yaxis()
-        pivot = session_summary.pivot_table(index="participant_id", columns="condition_code", values="session_id", aggfunc="count", fill_value=0)
-        pivot = pivot.reindex(columns=[x for x in CONDITION_ORDER if x in pivot.columns])
-        if pivot.shape[0] <= 1:
-            axes[1, 1].axis("off")
-            rows = [
-                f"Participants: {session_summary['participant_id'].nunique()}",
-                f"Sessions: {len(session_summary)}",
-                "Conditions: " + ", ".join(str(x) for x in cond_counts.index),
-                "This tiny cohort is summarized descriptively instead of using a participant heatmap.",
-            ]
-            axes[1, 1].text(0.03, 0.92, "\n".join(rows), transform=axes[1, 1].transAxes, va="top", ha="left", fontsize=11, color="#334155")
-            fig._cltr_panel_notes = [
-                "Top left shows sessions per condition.",
-                "Top right shows mean questionnaire completeness and mean device coverage across Blocks 1 to 3.",
-                "Bottom left shows the most-supported channels.",
-                "Bottom right shows a compact tiny-cohort summary.",
-            ]
-        else:
-            axes[1, 1].imshow(pivot.values, aspect="auto", cmap="Blues")
-            axes[1, 1].grid(False)
-            axes[1, 1].set_xticks(range(len(pivot.columns)))
-            axes[1, 1].set_xticklabels(pivot.columns, rotation=45, ha="right")
-            axes[1, 1].set_yticks(range(len(pivot.index)))
-            axes[1, 1].set_yticklabels(pivot.index)
-            fig._cltr_panel_notes = [
-                "Top left shows sessions per condition.",
-                "Top right shows mean questionnaire completeness and mean device coverage across Blocks 1 to 3.",
-                "Bottom left shows the most-supported channels.",
-                "Bottom right shows participant-by-condition completeness.",
-            ]
-        fig.tight_layout(rect=(0, 0, 1, 0.96))
+        factor_palette = {
+            "DIM": CONDITION_COLORS.get("DIM-MOR", "#475569"),
+            "BRI": CONDITION_COLORS.get("BRI-MID", "#1d4ed8"),
+            "MOR": "#0f766e",
+            "MID": "#ea580c",
+        }
+        group_positions = np.array([0.0, 1.6], dtype=float)
+        illuminance_counts = factor_counts[0][1]
+        timing_counts = factor_counts[1][1]
+        illuminance_parts = [("DIM", float(illuminance_counts.get("DIM", 0))), ("BRI", float(illuminance_counts.get("BRI", 0)))]
+        timing_parts = [("MOR", float(timing_counts.get("MOR", 0))), ("MID", float(timing_counts.get("MID", 0)))]
+        bar_width = 0.7
+        bottom = 0.0
+        for idx, (level, value) in enumerate(illuminance_parts):
+            axes[1].bar(
+                group_positions[0],
+                value,
+                bottom=bottom,
+                width=bar_width,
+                color=factor_palette[level],
+                edgecolor="white",
+                linewidth=0.8,
+                label=level,
+            )
+            bottom += value
+        illum_total = bottom
+        bottom = 0.0
+        for idx, (level, value) in enumerate(timing_parts):
+            axes[1].bar(
+                group_positions[1],
+                value,
+                bottom=bottom,
+                width=bar_width,
+                color=factor_palette[level],
+                edgecolor="white",
+                linewidth=0.8,
+                label=level,
+            )
+            bottom += value
+        timing_total = bottom
+        axes[1].set_xticks(group_positions)
+        axes[1].set_xticklabels(["Illuminance", "Diurnal timing"])
+        axes[1].set_ylabel("Sessions")
+        axes[1].set_ylim(0, max(float(max(illum_total, timing_total)) * 1.18, 1.0))
+        axes[1].set_xlim(-0.75, 2.35)
+        axes[1].grid(True, axis="y", alpha=0.2)
+        axes[1].grid(False, axis="x")
+        axes[1].text(group_positions[0], illum_total + 0.25, f"{int(illum_total)}", ha="center", va="bottom", fontsize=9, color="#334155", fontweight="bold")
+        axes[1].text(group_positions[1], timing_total + 0.25, f"{int(timing_total)}", ha="center", va="bottom", fontsize=9, color="#334155", fontweight="bold")
+        axes[1].legend(frameon=False, fontsize=8.5, ncol=4, loc="upper center", bbox_to_anchor=(0.5, 1.14))
+
+        support_cols = [
+            ("Questionnaire", "questionnaire_completeness"),
+            ("Empatica", "empatica_fraction"),
+            ("BIOPAC", "biopac_fraction"),
+            ("Indoor", "indoor_fraction"),
+        ]
+        support_table = (
+            session_summary.groupby("condition_code", as_index=True)[[col for _, col in support_cols]]
+            .mean()
+            .reindex(cond_order)
+        )
+        mat = support_table.to_numpy(dtype=float)
+        cmap = LinearSegmentedColormap.from_list("session_support", ["#fff7ed", "#fde68a", "#0f766e"])
+        im = axes[2].imshow(mat, aspect="auto", cmap=cmap, vmin=0, vmax=1)
+        axes[2].grid(False)
+        axes[2].set_xticks(range(len(support_cols)))
+        axes[2].set_xticklabels([label for label, _ in support_cols], rotation=0, ha="center")
+        axes[2].set_yticks(range(len(cond_order)))
+        axes[2].set_yticklabels(cond_order)
+        axes[2].tick_params(axis="x", labelsize=9, pad=8)
+        for row in range(mat.shape[0]):
+            for col in range(mat.shape[1]):
+                val = float(mat[row, col])
+                axes[2].text(
+                    col,
+                    row,
+                    f"{val:.2f}",
+                    ha="center",
+                    va="center",
+                    fontsize=8.5,
+                    color="white" if val >= 0.62 else "#172033",
+                    fontweight="bold",
+                )
+        plt.colorbar(im, ax=axes[2], fraction=0.05, pad=0.05, label="Mean support fraction")
+
+        for ax in axes:
+            ax.set_axisbelow(True)
+            if ax is not axes[2]:
+                ax.grid(True, axis="y", alpha=0.18)
+        fig._cltr_panel_notes = [
+            "Left|Session types|The number of sessions contributing to each condition-defined session type.",
+            "Middle|Factor balance|Balance across the two design factors, illuminance and diurnal timing.",
+            "Right|Mean analytic support by session type|Mean analytic support by session type for questionnaire, Empatica, BIOPAC, and indoor environmental streams.",
+        ]
         return fig
 
     def _fig_cohort_window_validation(self, c: dict):
@@ -4260,32 +4371,7 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
             cond_order = support["condition_code"].astype(str).tolist()
         temp = support.set_index("condition_code").reindex(cond_order)
 
-        axes[0, 0].bar(
-            cond_order,
-            to_numeric(temp["n_sessions"]).fillna(0),
-            color=[CONDITION_COLORS.get(x, "#475569") for x in cond_order],
-        )
-        axes[0, 0].set_ylabel("Sessions")
-        axes[0, 0].set_title("Condition balance")
-
-        coverage_cols = [
-            ("questionnaire_completeness__mean", "Questionnaire", "#111827"),
-            ("empatica_fraction__mean", "Empatica", "#2563eb"),
-            ("biopac_fraction__mean", "BIOPAC", "#dc2626"),
-            ("indoor_fraction__mean", "Indoor", "#059669"),
-        ]
-        width = 0.18
         x = np.arange(len(cond_order), dtype=float)
-        for idx, (col, label, color) in enumerate(coverage_cols):
-            vals = to_numeric(temp[col]).fillna(0).to_numpy(dtype=float) if col in temp.columns else np.zeros(len(cond_order))
-            axes[0, 1].bar(x + (idx - 1.5) * width, vals, width=width, color=color, label=label)
-        axes[0, 1].set_xticks(x)
-        axes[0, 1].set_xticklabels(cond_order)
-        axes[0, 1].set_ylim(0, 1)
-        axes[0, 1].set_ylabel("Mean support fraction")
-        axes[0, 1].set_title("Comparison-window coverage")
-        axes[0, 1].legend(frameon=False, fontsize=8, ncol=2, loc="upper right")
-
         overlap_cols = [
             ("hr_overlap_minutes__mean", "Heart rate", "#111827"),
             ("eda_overlap_minutes__mean", "EDA", "#2563eb"),
@@ -4293,52 +4379,140 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
         ]
         for idx, (col, label, color) in enumerate(overlap_cols):
             vals = to_numeric(temp[col]).fillna(0).to_numpy(dtype=float) if col in temp.columns else np.zeros(len(cond_order))
-            axes[1, 0].bar(x + (idx - 1) * 0.22, vals, width=0.22, color=color, label=label)
-        axes[1, 0].set_xticks(x)
-        axes[1, 0].set_xticklabels(cond_order)
-        axes[1, 0].set_ylabel("Mean overlap minutes")
-        axes[1, 0].set_title("Paired-device validation window")
-        axes[1, 0].legend(frameon=False, fontsize=8, loc="upper right")
+            axes[0, 0].bar(x + (idx - 1) * 0.24, vals, width=0.24, color=color, label=label)
+        axes[0, 0].set_xticks(x)
+        axes[0, 0].set_xticklabels(cond_order)
+        axes[0, 0].set_ylabel("Mean overlap minutes")
+        axes[0, 0].set_title("Paired overlap by condition")
+        axes[0, 0].legend(frameon=False, fontsize=8.5, ncol=3, loc="upper left", bbox_to_anchor=(0.0, 1.18))
+
+        metrics = ["heart_rate", "eda", "temperature"]
+        metric_labels = {"heart_rate": "Heart rate", "eda": "EDA", "temperature": "Temperature"}
+        metric_colors = {"heart_rate": "#111827", "eda": "#2563eb", "temperature": "#ea580c"}
 
         if agreement.empty:
+            axes[0, 1].axis("off")
+            axes[1, 0].axis("off")
             axes[1, 1].axis("off")
-        else:
-            agg = (
-                agreement.groupby(["metric", "condition_code"], as_index=False)
-                .agg(
-                    eligible_sessions=("eligible", "sum"),
-                    sessions=("session_id", "nunique"),
-                )
+            fig._cltr_panel_notes = [
+                "Top left|Paired overlap by condition|Mean paired-device overlap minutes by condition and modality.",
+                "Summary|Agreement summary unavailable|No paired-device agreement summary was available for this cohort export.",
+            ]
+            fig.tight_layout(rect=(0, 0, 1, 0.96))
+            return fig
+
+        agg = (
+            agreement.groupby(["metric", "condition_code"], as_index=False)
+            .agg(
+                eligible_sessions=("eligible", "sum"),
+                sessions=("session_id", "nunique"),
             )
-            metrics = ["heart_rate", "eda", "temperature"]
-            y = np.arange(len(metrics), dtype=float)
-            for idx, cond in enumerate(cond_order):
-                cur = agg.loc[agg["condition_code"].astype(str) == cond].set_index("metric").reindex(metrics)
-                vals = to_numeric(cur["eligible_sessions"]).fillna(0).to_numpy(dtype=float)
-                axes[1, 1].barh(
-                    y + (idx - max(len(cond_order) - 1, 0) / 2) * 0.18,
-                    vals,
-                    height=0.18,
-                    color=CONDITION_COLORS.get(cond, "#475569"),
-                    label=cond,
-                )
-            axes[1, 1].set_yticks(y)
-            axes[1, 1].set_yticklabels(["Heart rate", "EDA", "Temperature"])
-            axes[1, 1].set_xlabel("Eligible sessions")
-            axes[1, 1].set_title("Validation-ready session counts")
-            axes[1, 1].legend(frameon=False, fontsize=8, ncol=2, loc="lower right")
+        )
+        for idx, metric in enumerate(metrics):
+            cur = agg.loc[agg["metric"].astype(str) == metric].set_index("condition_code").reindex(cond_order)
+            vals = to_numeric(cur["eligible_sessions"]).fillna(0).to_numpy(dtype=float)
+            axes[0, 1].bar(
+                x + (idx - 1) * 0.24,
+                vals,
+                width=0.24,
+                color=metric_colors[metric],
+                label=metric_labels[metric],
+            )
+        axes[0, 1].set_xticks(x)
+        axes[0, 1].set_xticklabels(cond_order)
+        axes[0, 1].set_ylabel("Eligible sessions")
+        axes[0, 1].set_title("Validation-ready sessions")
+        axes[0, 1].legend(frameon=False, fontsize=8.5, ncol=3, loc="upper left", bbox_to_anchor=(0.0, 1.18))
+
+        eligible = agreement.loc[to_numeric(agreement["eligible"]).fillna(0) > 0].copy()
+        spearman_data = []
+        mae_data = []
+        for metric in metrics:
+            cur = eligible.loc[eligible["metric"].astype(str) == metric]
+            spearman_data.append(to_numeric(cur.get("spearman_r", pd.Series(dtype=float))).dropna().to_numpy(dtype=float))
+            mae_data.append(to_numeric(cur.get("mae", pd.Series(dtype=float))).dropna().to_numpy(dtype=float))
+        box_positions = np.arange(1, len(metrics) + 1, dtype=float)
+        rng = np.random.default_rng(42)
+
+        bp = axes[1, 0].boxplot(
+            spearman_data,
+            positions=box_positions,
+            widths=0.56,
+            patch_artist=True,
+            showfliers=False,
+            medianprops={"color": "white", "linewidth": 1.4},
+            boxprops={"linewidth": 0.8},
+            whiskerprops={"linewidth": 0.8},
+            capprops={"linewidth": 0.8},
+        )
+        for patch, metric in zip(bp["boxes"], metrics):
+            patch.set_facecolor(metric_colors[metric])
+            patch.set_alpha(0.82)
+            patch.set_edgecolor(metric_colors[metric])
+        for idx, (metric, values) in enumerate(zip(metrics, spearman_data), start=1):
+            if len(values) == 0:
+                continue
+            jitter = rng.normal(0, 0.045, size=len(values))
+            axes[1, 0].scatter(
+                np.full(len(values), idx, dtype=float) + jitter,
+                values,
+                s=14,
+                alpha=0.35,
+                color=metric_colors[metric],
+                edgecolors="none",
+                zorder=3,
+            )
+        axes[1, 0].axhline(0.7, color="#94a3b8", lw=1.0, ls="--")
+        axes[1, 0].set_xticks(box_positions)
+        axes[1, 0].set_xticklabels([metric_labels[m] for m in metrics])
+        axes[1, 0].set_ylabel("Spearman r")
+        axes[1, 0].set_title("Agreement strength across eligible sessions")
+        axes[1, 0].set_ylim(-1.05, 1.05)
+
+        bp2 = axes[1, 1].boxplot(
+            mae_data,
+            positions=box_positions,
+            widths=0.56,
+            patch_artist=True,
+            showfliers=False,
+            medianprops={"color": "white", "linewidth": 1.4},
+            boxprops={"linewidth": 0.8},
+            whiskerprops={"linewidth": 0.8},
+            capprops={"linewidth": 0.8},
+        )
+        for patch, metric in zip(bp2["boxes"], metrics):
+            patch.set_facecolor(metric_colors[metric])
+            patch.set_alpha(0.82)
+            patch.set_edgecolor(metric_colors[metric])
+        for idx, (metric, values) in enumerate(zip(metrics, mae_data), start=1):
+            if len(values) == 0:
+                continue
+            jitter = rng.normal(0, 0.045, size=len(values))
+            axes[1, 1].scatter(
+                np.full(len(values), idx, dtype=float) + jitter,
+                values,
+                s=14,
+                alpha=0.35,
+                color=metric_colors[metric],
+                edgecolors="none",
+                zorder=3,
+            )
+        axes[1, 1].set_xticks(box_positions)
+        axes[1, 1].set_xticklabels([metric_labels[m] for m in metrics])
+        axes[1, 1].set_ylabel("Mean absolute error")
+        axes[1, 1].set_title("Magnitude discrepancy across eligible sessions")
 
         for ax in axes.ravel():
-            ax.grid(True, axis="y", alpha=0.2)
             ax.set_axisbelow(True)
+            ax.grid(True, axis="y", alpha=0.2)
 
         fig._cltr_panel_notes = [
-            "Top left shows session balance across conditions.",
-            "Top right shows mean questionnaire and device coverage across Blocks 1 to 3.",
-            "Bottom left shows mean overlap minutes for the three validation modalities.",
-            "Bottom right shows how many sessions per condition meet the paired-device validation threshold.",
+            "Top left|Paired overlap by condition|Mean paired-device overlap minutes by condition for heart rate, electrodermal activity, and temperature.",
+            "Top right|Validation-ready sessions|How many sessions per condition meet the paired-device validation threshold for each modality.",
+            "Bottom left|Agreement strength across eligible sessions|Agreement strength across eligible sessions; heart rate validates well in the subset where overlap exists, while electrodermal agreement is weak.",
+            "Bottom right|Magnitude discrepancy across eligible sessions|Magnitude discrepancy across eligible sessions so device disagreement remains visible even when overlap is complete.",
         ]
-        fig.tight_layout(rect=(0, 0, 1, 0.96))
+        fig.tight_layout(rect=(0, 0, 1, 0.94))
         return fig
 
     def _fig_cohort_support_map(self, minute: pd.DataFrame):
@@ -4390,19 +4564,30 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
         mat = np.vstack(rows)
         fig, ax = plt.subplots(figsize=(13.2, max(5.4, 0.34 * len(labels) + 1.8)))
         cmap = LinearSegmentedColormap.from_list("cohort_support", ["#f8fafc", "#0f766e"])
-        im = ax.imshow(mat, aspect="auto", cmap=cmap, interpolation="nearest", vmin=0, vmax=1)
+        minute_min = float(minute_index_values[0]) - 0.5
+        minute_max = float(minute_index_values[-1]) + 0.5
+        im = ax.imshow(
+            mat,
+            aspect="auto",
+            cmap=cmap,
+            interpolation="nearest",
+            vmin=0,
+            vmax=1,
+            extent=(minute_min, minute_max, len(labels) - 0.5, -0.5),
+        )
         ax.grid(False)
         ax.set_yticks(range(len(labels)))
         ax.set_yticklabels(labels, fontsize=8)
         tick_count = min(8, len(minute_index_values))
-        xticks = np.linspace(0, len(minute_index_values) - 1, tick_count, dtype=int) if tick_count > 1 else np.array([0])
-        ax.set_xticks(xticks)
-        ax.set_xticklabels([str(minute_index_values[idx]) for idx in xticks], fontsize=9)
+        tick_indices = np.linspace(0, len(minute_index_values) - 1, tick_count, dtype=int) if tick_count > 1 else np.array([0])
+        tick_values = [minute_index_values[idx] for idx in tick_indices]
+        ax.set_xticks(tick_values)
+        ax.set_xticklabels([str(value) for value in tick_values], fontsize=9)
         ax.set_xlabel("Timeline minute")
         self._add_phase_spans(ax, minute_template)
         plt.colorbar(im, ax=ax, shrink=0.82, label="Fraction of sessions with support")
         fig._cltr_panel_notes = [
-            "Rows show condition-by-modality support across the cohort comparison window.",
+            "Rows show condition-by-modality support across the full cohort protocol timeline.",
             "Phase annotations mark the shared protocol structure so validation windows can be read against the study timeline.",
         ]
         fig.tight_layout(rect=(0, 0, 1, 0.96))
@@ -4481,7 +4666,7 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
             if cond in display_minute["condition_code"].astype(str).unique()
         ]
         if handles:
-            ax.legend(handles=handles, frameon=False, ncol=2, loc="upper right")
+            self._place_condition_legend(ax, handles=handles)
         baseline_note = self._baseline_note(self._phase_metric_baseline(self._phase_summary_from_minute(minute, [column]), column))
         note = " ".join(
             part
@@ -4587,7 +4772,7 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
             ax.text(xpos, y_tail, f"n={n_obs}", ha="center", va="top", fontsize=7, color="#475569", clip_on=False)
         ax.set_ylim(y_min - 0.2 * y_span, y_max + 0.04 * y_span)
         if legend_handles:
-            ax.legend(handles=legend_handles, frameon=False, ncol=2, loc="upper right")
+            self._place_condition_legend(ax, handles=legend_handles)
         fig.tight_layout()
         return fig
 
@@ -4632,7 +4817,7 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
         self._add_phase_spans(ax, minute.drop_duplicates(subset=["minute_index", "protocol_phase"]))
         self._cohort_band(minute, metric, ax)
         ax.set_xlabel("Minute index")
-        ax.legend(frameon=False, ncol=2, loc="upper right")
+        self._place_condition_legend(ax)
         fig.tight_layout()
         return fig
 
@@ -4900,8 +5085,8 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
             return None
         fig, axes = plt.subplots(1, 2, figsize=(13.2, 5.8), gridspec_kw={"width_ratios": [1.2, 0.8]})
         fig._cltr_panel_notes = [
-            "Left shows dominant recurring patterns across the cohort.",
-            "Right shows the strongest session-level motifs.",
+            "Left|Dominant recurring patterns across the cohort|Dominant recurring patterns across the cohort.",
+            "Right|Strongest session-level motifs|The strongest session-level motifs.",
         ]
         recurrent_patterns = pd.DataFrame()
         if not pattern_summary.empty:
@@ -4982,7 +5167,11 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
             return None
         fig, axes = plt.subplots(1, 3, figsize=(13, 4.2))
         metrics = ["heart_rate", "eda", "temperature"]
-        panel_notes = ["Left shows median overlap.", "Center shows median Spearman correlation.", "Right shows median mean absolute error."]
+        panel_notes = [
+            "Left|Median overlap|Median overlap.",
+            "Center|Median Spearman correlation|Median Spearman correlation.",
+            "Right|Median mean absolute error|Median mean absolute error.",
+        ]
         for ax, col, title in zip(axes, ["median_overlap_minutes", "median_spearman_r", "median_mae"], ["Median overlap", "Median Spearman r", "Median MAE"]):
             vals = []
             colors = []
@@ -5041,7 +5230,10 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
                 ax.bar(d["condition_code"], d[metric], color=[CONDITION_COLORS.get(str(x), "#475569") for x in d["condition_code"]])
                 ax.set_ylabel(FEATURE_LABELS.get(metric, metric))
                 ax.tick_params(axis="x", rotation=45)
-            fig._cltr_panel_notes = [f"{['Left','Center','Right'][idx]} shows {FEATURE_LABELS.get(metric, metric)} by condition." for idx, metric in enumerate(metrics)]
+            fig._cltr_panel_notes = [
+                f"{['Left','Center','Right'][idx]}|{FEATURE_LABELS.get(metric, metric)} by condition|{FEATURE_LABELS.get(metric, metric)} by condition."
+                for idx, metric in enumerate(metrics)
+            ]
             fig.tight_layout(rect=(0, 0, 1, 0.96))
             return fig
         metrics = [m for m in ["thermal_comfort", "biopac_temp_chest_mean_C"] if m in profiles.columns]
@@ -5063,7 +5255,10 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
             ax.set_yticklabels(pivot.index)
             ax.set_ylabel(FEATURE_LABELS.get(metric, metric))
             plt.colorbar(im, ax=ax, shrink=0.8)
-        fig._cltr_panel_notes = [f"{['Left','Right'][idx]} shows participant-by-condition variation for {FEATURE_LABELS.get(metric, metric)}." for idx, metric in enumerate(metrics)]
+        fig._cltr_panel_notes = [
+            f"{['Left','Right'][idx]}|Participant-by-condition variation for {FEATURE_LABELS.get(metric, metric)}|Participant-by-condition variation for {FEATURE_LABELS.get(metric, metric)}."
+            for idx, metric in enumerate(metrics)
+        ]
         fig.tight_layout(rect=(0, 0, 1, 0.96))
         return fig
 
@@ -5123,6 +5318,14 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
             obs.append(f"Median eligible heart-rate agreement is `{hr.median():.2f}`.")
         else:
             obs.append("No eligible heart-rate agreement rows are available yet.")
+        signal_audit = c.get("signal_audit_summary", pd.DataFrame())
+        if not signal_audit.empty:
+            primary = signal_audit.loc[signal_audit["recommended_role"].astype(str).isin(["primary", "primary_with_qc"]), "signal_stream"].astype(str).tolist()
+            limited = signal_audit.loc[signal_audit["recommended_role"].astype(str).isin(["secondary_only", "secondary_validation", "subset_only", "not_primary", "not_recommended"]), "signal_stream"].astype(str).tolist()
+            if primary:
+                obs.append("Primary device streams in this release are " + ", ".join(self._fmt_cell(x) for x in primary) + ".")
+            if limited:
+                obs.append("Limited or secondary-use streams are " + ", ".join(self._fmt_cell(x) for x in limited[:4]) + ".")
         return obs[:4]
 
     def _phase_delta_map(self, phase: pd.DataFrame) -> dict[str, dict]:
@@ -5394,9 +5597,7 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
             f"</section>"
         )
         masthead = self._shared_chrome(
-            home_href="../../../index.html",
-            publication_href="../../../publication.html",
-            logo_src=self._logo_paths("work")["home"],
+            home_href="index.html",
             page_type="Atlas",
             page_meta=f"{len(records)} session reports and one cohort summary",
             menu_button_id="sessionMenuButton",
@@ -5409,7 +5610,8 @@ body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033;
         return f"""<!doctype html><html><head><meta charset='utf-8'><title>{WORK_INDEX_TITLE}</title>
 <style>
 {self._shared_index_css()}
-</style></head><body class='reportKind--atlas'>{masthead}<div class='page'><section class='hero'>{atlas_intro}{cohort_panel}</section><section id='sessionGrid' class='grid'>{cards}</section></div><script>
+</style></head><body class='reportKind--atlas'>{masthead}<div class='page'><section class='hero'>{atlas_intro}{cohort_panel}</section><section id='sessionGrid' class='grid'>{cards}</section></div><div class='copyrightNote'>{COPYRIGHT_NOTE}</div><script>
+{self._theme_toggle_script()}
 const sessionMenuButton=document.getElementById('sessionMenuButton'); const sessionMenuPanel=document.getElementById('sessionMenuPanel');
 const closeSessionMenu=()=>{{ if(!sessionMenuPanel||!sessionMenuButton) return; sessionMenuPanel.classList.remove('open'); sessionMenuButton.setAttribute('aria-expanded','false'); }};
 const toggleSessionMenu=()=>{{ if(!sessionMenuPanel||!sessionMenuButton) return; const open=sessionMenuPanel.classList.toggle('open'); sessionMenuButton.setAttribute('aria-expanded', open ? 'true' : 'false'); }};
@@ -5494,13 +5696,9 @@ if(sessionMenuButton&&sessionMenuPanel){{ sessionMenuButton.addEventListener('cl
         )
         plotly_js = f"<script>{get_plotlyjs()}</script>" if any(spec.get("html_fragment") for spec in all_specs) else ""
         badge = "Cohort Report" if str(doc_kind) == "cohort" else "Session Report"
-        home_href = "../../../../index.html" if str(doc_kind) == "cohort" else "../../../../../index.html"
-        publication_href = "../../../../publication.html" if str(doc_kind) == "cohort" else "../../../../../publication.html"
-        logo_src = self._logo_paths("cohort" if str(doc_kind) == "cohort" else "session")["home"]
+        home_href = "../../work/index.html" if str(doc_kind) == "cohort" else "../../../work/index.html"
         masthead = self._shared_chrome(
             home_href=home_href,
-            publication_href=publication_href,
-            logo_src=logo_src,
             page_type=badge,
             page_meta=title,
             menu_button_id="figureMenuButton",
@@ -5512,7 +5710,8 @@ if(sessionMenuButton&&sessionMenuPanel){{ sessionMenuButton.addEventListener('cl
         return f"""<!doctype html><html><head><meta charset='utf-8'><title>{html_escape(title)}</title>
 <style>
 {self._shared_report_css()}
-</style></head><body class='reportKind--{html_escape(doc_kind)}'>{masthead}<div class='page' id='pageRoot'><section class='hero'><div class='panel heroLead'><div class='eyebrow'>{html_escape(badge)}</div><div class='title'>{html_escape(title)}</div><p class='subtitle'>{html_escape(subtitle)}</p><div class='cards'>{cards_html}</div></div><div class='panel heroSide'>{obs_html}</div></section><div class='reportShell'><section class='stack'>{sections_html}</section></div></div><div id='lightbox' class='lightbox'><img id='lightboxImg' alt='Expanded figure'/></div>{plotly_js}<script>
+</style></head><body class='reportKind--{html_escape(doc_kind)}'>{masthead}<div class='page' id='pageRoot'><section class='hero'><div class='panel heroLead'><div class='eyebrow'>{html_escape(badge)}</div><div class='title'>{html_escape(title)}</div><p class='subtitle'>{html_escape(subtitle)}</p><div class='cards'>{cards_html}</div></div><div class='panel heroSide'>{obs_html}</div></section><div class='reportShell'><section class='stack'>{sections_html}</section></div></div><div id='lightbox' class='lightbox'><img id='lightboxImg' alt='Expanded figure'/></div><div class='copyrightNote'>{COPYRIGHT_NOTE}</div>{plotly_js}<script>
+{self._theme_toggle_script()}
 const lightbox=document.getElementById('lightbox'); const lightboxImg=document.getElementById('lightboxImg'); document.querySelectorAll('.figureImage').forEach(img=>img.addEventListener('click',()=>{{ lightboxImg.src=img.src; lightbox.classList.add('open'); }})); lightbox.addEventListener('click',()=>lightbox.classList.remove('open'));
 const figureMenuButton=document.getElementById('figureMenuButton'); const figureMenuPanel=document.getElementById('figureMenuPanel');
 const closeFigureMenu=()=>{{ if(!figureMenuPanel||!figureMenuButton) return; figureMenuPanel.classList.remove('open'); figureMenuButton.setAttribute('aria-expanded','false'); }};
@@ -5563,14 +5762,35 @@ window.addEventListener('resize', resizePlots); requestAnimationFrame(resizePlot
             text = str(note).strip().rstrip(".")
             if not text:
                 continue
-            label, sep, body = text.partition(" shows ")
-            if sep:
-                body = "shows " + body
+            panel_label = ""
+            panel_title = ""
+            body = ""
+            if "|" in text:
+                pieces = [piece.strip() for piece in text.split("|", 2)]
+                if len(pieces) == 3:
+                    panel_label, panel_title, body = pieces
+                elif len(pieces) == 2:
+                    panel_label, panel_title = pieces
             else:
-                label, sep, body = text.partition(":")
-                body = body.lstrip()
-            label_html = f"<strong>{html_escape(label.strip())}:</strong>"
-            body_html = html_escape(body.strip()) if body.strip() else ""
+                label, sep, tail = text.partition(" shows ")
+                if sep:
+                    panel_label = label.strip()
+                    body = tail.strip()
+                else:
+                    label, sep, tail = text.partition(":")
+                    panel_label = label.strip()
+                    body = tail.strip()
+            panel_label = " ".join(panel_label.split()).title()
+            panel_title = " ".join(panel_title.split())
+            body = body.strip()
+
+            if panel_label and panel_title:
+                label_html = f"<strong>[{html_escape(panel_label)}] {html_escape(panel_title)}:</strong>"
+            elif panel_label:
+                label_html = f"<strong>[{html_escape(panel_label)}]</strong>"
+            else:
+                label_html = ""
+            body_html = html_escape(body) if body else ""
             parts.append(f"{label_html} {body_html}".strip())
         if not parts:
             return ""
@@ -5655,11 +5875,37 @@ window.addEventListener('resize', resizePlots); requestAnimationFrame(resizePlot
                 "hr_overlap_minutes": "Heart-rate overlap (min)",
                 "eda_overlap_minutes": "EDA overlap (min)",
                 "temp_overlap_minutes": "Temperature overlap (min)",
+                "primary": "Primary",
+                "primary_with_qc": "Primary with QC",
+                "secondary_only": "Secondary only",
+                "secondary_validation": "Secondary validation",
+                "subset_only": "Subset only",
+                "not_primary": "Not primary",
+                "not_recommended": "Not recommended",
+                "usable_with_caution": "Usable with caution",
             }
             if value in FEATURE_LABELS:
                 return FEATURE_LABELS[value]
             if value in replacements:
                 return replacements[value]
+            signal_labels = {
+                "biopac_hr": "BIOPAC HR",
+                "empatica_hr": "Empatica HR",
+                "biopac_eda": "BIOPAC EDA",
+                "empatica_eda": "Empatica EDA",
+                "biopac_temp": "BIOPAC chest temperature",
+                "empatica_temp": "Empatica temperature",
+                "empatica_bvp": "Empatica BVP",
+                "heart_rate": "Heart rate",
+                "eda": "EDA",
+                "temperature": "Temperature",
+                "bvp_source": "BVP source",
+                "strong": "Strong",
+                "limited": "Limited",
+                "weak": "Weak",
+            }
+            if value in signal_labels:
+                return signal_labels[value]
             phase_labels = {
                 "acclimation": "Acclimation",
                 "fan_at_constant_speed": "Fan at constant speed",
@@ -5705,12 +5951,8 @@ window.addEventListener('resize', resizePlots); requestAnimationFrame(resizePlot
         sample = c.get("sample_status", pd.DataFrame()).copy()
         support = c.get("condition_support_summary", pd.DataFrame()).copy()
         agreement = c.get("agreement_summary", pd.DataFrame()).copy()
-        a = self._render_table(
-            sample,
-            "Cohort Sample Status",
-            ["n_sessions", "n_participants", "min_sessions_required", "min_participants_required", "status"],
-            4,
-        )
+        signal_audit = c.get("signal_audit_summary", pd.DataFrame()).copy()
+        session_signal_audit = c.get("session_signal_audit", pd.DataFrame()).copy()
         b = self._render_table(
             support,
             "Comparison-Window Support By Condition",
@@ -5732,7 +5974,44 @@ window.addEventListener('resize', resizePlots); requestAnimationFrame(resizePlot
             ["metric", "n_sessions", "n_eligible_sessions", "median_overlap_minutes", "median_spearman_r", "median_mae", "summary_status"],
             8,
         )
-        return f"<section class='tableGrid'>{a}{b}</section><section class='tableGrid'>{ctab}</section>"
+        signal_table = self._render_table(
+            signal_audit,
+            "Signal Adequacy And Recommended Use",
+            [
+                "signal_stream",
+                "device",
+                "construct",
+                "mean_valid_minutes",
+                "mean_coverage_fraction",
+                "mean_plausible_fraction",
+                "median_overlap_minutes",
+                "median_spearman_r",
+                "adequacy_score",
+                "recommended_role",
+            ],
+            12,
+        )
+        signal_reading = self._render_table(
+            signal_audit,
+            "Scientific Reading Of Device Streams",
+            ["signal_stream", "adequacy_status", "flagged_sessions", "scientific_reading"],
+            12,
+        )
+        hr_flags = pd.DataFrame()
+        if not session_signal_audit.empty:
+            hr_flags = (
+                session_signal_audit.loc[session_signal_audit["construct"].astype(str) == "heart_rate"]
+                .sort_values(["concern_score", "session_id"], ascending=[False, True])
+                .head(8)
+                .copy()
+            )
+        flag_table = self._render_table(
+            hr_flags,
+            "Flagged Heart-Rate Sessions",
+            ["session_id", "signal_stream", "n_valid_minutes", "paired_overlap_minutes", "paired_spearman_r", "min_value", "max_value", "concern_score"],
+            8,
+        )
+        return f"<section class='tableGrid'>{b}</section><section class='tableGrid'>{ctab}{signal_table}</section><section class='tableGrid'>{signal_reading}{flag_table}</section>"
 
     def _stage_panel(self, title: str, body: str) -> str:
         return f"<section class='tablePanel'><h3>{html_escape(title)}</h3><p>{html_escape(body)}</p></section>"
@@ -5828,15 +6107,33 @@ window.addEventListener('resize', resizePlots); requestAnimationFrame(resizePlot
     def _cohort_stage_sections(self, c: dict) -> str:
         sample = c["sample_status"].iloc[0]
         inferential = bool(sample["cohort_inference_eligible"])
-        guide = self._stage_panel(
-            "Study Overview",
-            "This report now follows the same audit-first logic as the upgraded session report: support is established first, measured trends are shown next, cohort-level derived results are support-gated, and relationship panels are kept descriptive.",
+        signal_audit = c.get("signal_audit_summary", pd.DataFrame()).copy()
+        hr_rows = signal_audit.loc[signal_audit["construct"].astype(str) == "heart_rate"].copy() if not signal_audit.empty else pd.DataFrame()
+        hr_summary = ""
+        if not hr_rows.empty:
+            primary = hr_rows.loc[hr_rows["recommended_role"].astype(str).isin(["primary", "primary_with_qc"]), "signal_stream"].astype(str).tolist()
+            limited = hr_rows.loc[~hr_rows["recommended_role"].astype(str).isin(["primary", "primary_with_qc"]), "signal_stream"].astype(str).tolist()
+            pieces = []
+            if primary:
+                pieces.append("primary HR support is carried by " + ", ".join(self._fmt_cell(x) for x in primary))
+            if limited:
+                pieces.append("limited HR streams are " + ", ".join(self._fmt_cell(x) for x in limited))
+            if pieces:
+                hr_summary = " In the current release, " + "; ".join(pieces) + "."
+        synopsis = self._stage_panel(
+            "Synopsis",
+            (
+                "This cohort report is the final synthesis layer of the CLTR pipeline: session timelines are aligned first, modality-specific minute summaries are built next, support and agreement are audited before interpretation, and only then are cohort-level patterns, contrasts, and device conclusions presented."
+                + hr_summary
+                + " "
+                + (
+                    "The study includes enough sessions and participants for cross-session comparison, but the signal audit below should still be read as part of the result itself, because device adequacy and disagreement determine which endpoints can be defended scientifically."
+                    if inferential
+                    else "The current sample should still be read as descriptive and support-gated rather than fully inferential."
+                )
+            ),
         )
-        synthesis = self._stage_panel(
-            "How To Read This Summary",
-            "The study includes enough sessions and participants for full cross-session comparisons." if inferential else "The current sample is still relatively small, so the cohort result layer should be read as descriptive and support-gated rather than inferential.",
-        )
-        return guide + synthesis + self._cohort_report_tables(c)
+        return synopsis + self._cohort_report_tables(c)
 
     def _cohort_section_intros(self, c: dict) -> dict[str, str]:
         sample = c["sample_status"].iloc[0]
@@ -5910,6 +6207,39 @@ window.addEventListener('resize', resizePlots); requestAnimationFrame(resizePlot
             if isinstance(fig, go.Figure):
                 spec["html_fragment"] = fig.to_html(full_html=False, include_plotlyjs=False, config={"responsive": True, "displaylogo": False})
             else:
+                if len(getattr(fig, "axes", [])) > 1:
+                    for ax in fig.axes:
+                        try:
+                            ax.set_title("")
+                        except Exception:
+                            continue
+                condition_labels = set(CONDITION_ORDER)
+                for ax in getattr(fig, "axes", []):
+                    legend = ax.get_legend()
+                    if legend is None:
+                        continue
+                    labels = [text.get_text().strip() for text in legend.get_texts() if text.get_text().strip()]
+                    if len(labels) > 1 and set(labels).issubset(condition_labels):
+                        if hasattr(legend, "set_ncols"):
+                            legend.set_ncols(len(labels))
+                        else:
+                            legend._ncols = len(labels)
+                    for line in ax.get_lines():
+                        try:
+                            current = float(line.get_linewidth())
+                        except Exception:
+                            continue
+                        if current <= 0:
+                            continue
+                        line.set_linewidth(max(0.6, current * 0.72))
+                    for collection in getattr(ax, "collections", []):
+                        try:
+                            widths = collection.get_linewidths()
+                        except Exception:
+                            continue
+                        if widths is None or len(widths) == 0:
+                            continue
+                        collection.set_linewidths([max(0.4, float(width) * 0.72) for width in widths])
                 path = figures_dir / f"{spec['stem']}.svg"
                 fig.savefig(path, format="svg", bbox_inches="tight")
                 plt.close(fig)
