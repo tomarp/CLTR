@@ -6,16 +6,16 @@
   <title>CLTR</title>
   <meta name="description" content="Chrono-Light Thermal Response: a multimodal controlled warm-exposure dataset crossing light intensity and time-of-day.">
   <style>
-    body { margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033; background:radial-gradient(circle at top left,#fff6e8 0%,#eef4ff 52%,#f8fafc 100%); }
-    .page { width:min(100%, 1360px); margin:0 auto; padding:24px 28px 48px; box-sizing:border-box; }
+    body { margin:0; min-height:100vh; display:flex; flex-direction:column; font-family: Georgia, "Times New Roman", serif; color:#172033; background:radial-gradient(circle at top left,#fff6e8 0%,#eef4ff 52%,#f8fafc 100%); }
+    .page { width:min(100%, 1360px); margin:0 auto; padding:24px 28px 48px; box-sizing:border-box; flex:1 0 auto; }
     .primaryBar { position:sticky; top:0; z-index:24; backdrop-filter:blur(16px); background:rgba(248,250,252,0.92); border-bottom:1px solid rgba(148,163,184,0.18); }
     .primaryBarInner { width:min(100%, 1360px); margin:0 auto; padding:12px 28px; display:flex; align-items:center; justify-content:space-between; gap:16px; box-sizing:border-box; }
     .logoLink { display:inline-flex; align-items:center; gap:12px; min-height:58px; text-decoration:none; }
     .logoLink:hover { transform:translateY(-1px); }
     .logoImage { width:58px; height:58px; object-fit:contain; display:block; flex-shrink:0; }
     .logoWordmark { display:inline-flex; align-items:center; height:58px; font:700 2.1rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:-0.04em; color:#172033; }
-    .mastheadActions { display:flex; align-items:center; gap:12px; flex-shrink:0; }
-    .socialLinks { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .mastheadActions { display:flex; align-items:center; justify-content:flex-end; gap:12px; flex:1 1 auto; min-width:0; }
+    .socialLinks { display:flex; align-items:center; justify-content:flex-end; gap:10px; flex-wrap:wrap; min-width:0; }
     .socialLink { display:inline-flex; align-items:center; justify-content:center; min-height:44px; padding:0 16px; border-radius:999px; text-decoration:none; color:#172033; background:linear-gradient(180deg,rgba(255,255,255,0.96) 0%,rgba(255,247,237,0.96) 100%); border:1px solid rgba(251,146,60,0.28); box-shadow:0 12px 28px rgba(23,32,51,0.08); font:700 0.92rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:0.01em; }
     .socialLink:hover { background:#ffffff; border-color:#fb923c; box-shadow:0 16px 34px rgba(23,32,51,0.12); transform:translateY(-1px); }
     .themeToggle { appearance:none; width:44px; height:44px; border-radius:999px; border:1px solid rgba(148,163,184,0.24); background:linear-gradient(180deg,rgba(255,255,255,0.96) 0%,rgba(255,247,237,0.96) 100%); color:#172033; box-shadow:0 12px 28px rgba(23,32,51,0.08); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
@@ -66,12 +66,15 @@
     .roleCode { margin:0 0 10px; color:#9a3412; font:700 0.76rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:0.14em; text-transform:uppercase; }
     .roleTitle { margin:0; font-size:1.42rem; line-height:1.28; color:#172033; }
     .homeFooter { width:min(100%, 1040px); display:grid; gap:0; justify-items:center; padding:20px 22px; }
-    .footerMarks { width:100%; display:flex; flex-wrap:nowrap; gap:14px; align-items:center; justify-content:space-between; }
-    .footerMark { flex:1 1 0; display:flex; align-items:center; justify-content:center; min-width:0; }
+    .footerMarks { width:100%; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; align-items:center; }
+    .footerMark { display:flex; align-items:center; justify-content:center; min-width:0; }
     .footerMarkImage { width:100%; max-width:220px; height:clamp(52px, 7vw, 88px); object-fit:contain; display:block; }
     .copyrightNote { width:min(100%, 1360px); margin:0 auto; padding:0 clamp(16px,2.4vw,28px) 18px; box-sizing:border-box; text-align:center; color:#64748b; font:500 0.84rem/1.5 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     body.theme-dark .copyrightNote { color:#94a3b8; }
-    @media (max-width:1000px) { .primaryBarInner { display:grid; padding:12px 20px; } .mastheadActions { justify-content:space-between; } .socialLinks { order:2; } .page { padding:20px 16px 40px; } .hero,.sectionGrid,.roleGrid,.introGrid { gap:16px; grid-template-columns:1fr; } .entrySwitch { width:100%; display:grid; border-radius:24px; } .entryOption { justify-content:flex-start; } .logoImage { width:52px; height:52px; } .logoWordmark { height:52px; font-size:1.9rem; } .footerMarks { gap:8px; } .footerMarkImage { height:clamp(40px, 9vw, 64px); } }
+    @media (max-width:1100px) { .footerMarks { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+    @media (max-width:1000px) { .page { padding:20px 16px 40px; } .hero,.sectionGrid,.roleGrid,.introGrid { gap:16px; grid-template-columns:1fr; } .entrySwitch { width:100%; display:grid; border-radius:24px; } .entryOption { justify-content:flex-start; } .footerMarks { gap:8px; } .footerMarkImage { height:clamp(40px, 9vw, 64px); } }
+    @media (max-width:860px) { .primaryBarInner { flex-wrap:wrap; padding:12px 20px; } .mastheadActions { width:100%; justify-content:space-between; } }
+    @media (max-width:640px) { .mastheadActions { display:grid; gap:10px; } .socialLinks { width:100%; justify-content:stretch; } .socialLink { flex:1 1 calc(50% - 10px); min-width:0; } .logoImage { width:52px; height:52px; } .logoWordmark { height:52px; font-size:1.9rem; } .footerMarks { grid-template-columns:1fr; } }
   </style>
 </head>
 <body class="reportKind--home">
@@ -165,5 +168,6 @@ if(storedTheme==='dark'){document.body.classList.add('theme-dark');}
 const syncThemeIcon=()=>{if(themeToggle){themeToggle.setAttribute('aria-pressed', document.body.classList.contains('theme-dark') ? 'true' : 'false');}};
 syncThemeIcon();
 if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classList.toggle('theme-dark');window.localStorage.setItem('cltr-theme', document.body.classList.contains('theme-dark') ? 'dark' : 'light');syncThemeIcon();});}
+if(window.location.pathname.endsWith("/index.html")){const cleanPath=window.location.pathname.slice(0,-"index.html".length)||"/";window.history.replaceState({},"",cleanPath+window.location.search+window.location.hash);}
 </script>
 </html>

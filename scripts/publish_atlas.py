@@ -33,6 +33,26 @@ def _rewrite_text(path: Path, replacements: list[tuple[str, str]]) -> None:
     path.write_text(text, encoding="utf-8")
 
 
+def _ensure_hide_index_html(path: Path) -> None:
+    if not path.exists():
+        return
+    text = path.read_text(encoding="utf-8")
+    marker = "window.history.replaceState"
+    if marker in text:
+        return
+    snippet = (
+        "if(window.location.pathname.endsWith('/index.html')){"
+        "const cleanPath=window.location.pathname.slice(0,-'index.html'.length)||'/';"
+        "window.history.replaceState({},'',cleanPath+window.location.search+window.location.hash);"
+        "}\n"
+    )
+    if "</script>" in text:
+        text = text.replace("</script>", f"{snippet}</script>", 1)
+    else:
+        text = text.replace("</body>", f"<script>\n{snippet}</script>\n</body>", 1)
+    path.write_text(text, encoding="utf-8")
+
+
 def publish_atlas(results_dir: str | Path, docs_atlas_dir: str | Path, target: str = "") -> dict[str, str]:
     results_dir = Path(results_dir).resolve()
     docs_atlas_dir = Path(docs_atlas_dir).resolve()
@@ -58,16 +78,21 @@ def publish_atlas(results_dir: str | Path, docs_atlas_dir: str | Path, target: s
 
     atlas_index_target = target_dir / "index.html"
     shutil.copy2(atlas_index_src, atlas_index_target)
+    _ensure_hide_index_html(atlas_index_target)
     if target_dir == docs_atlas_dir:
         for html_path in (target_dir / "cohort").rglob("*.html"):
             _rewrite_text(html_path, [("../../work/index.html", "../../index.html")])
+            _ensure_hide_index_html(html_path)
         for html_path in (target_dir / "sessions").rglob("*.html"):
             _rewrite_text(html_path, [("../../../work/index.html", "../../../index.html")])
+            _ensure_hide_index_html(html_path)
     else:
         for html_path in (target_dir / "cohort").rglob("*.html"):
             _rewrite_text(html_path, [("../../work/index.html", "../index.html")])
+            _ensure_hide_index_html(html_path)
         for html_path in (target_dir / "sessions").rglob("*.html"):
             _rewrite_text(html_path, [("../../../work/index.html", "../../index.html")])
+            _ensure_hide_index_html(html_path)
         docs_atlas_dir.mkdir(parents=True, exist_ok=True)
         (docs_atlas_dir / "index.html").write_text(_redirect_html(f"./{normalized_target}/index.html"), encoding="utf-8")
     return {
