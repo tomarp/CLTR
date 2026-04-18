@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CLTR Prediction Models</title>
+  <meta name="description" content="Machine-learning prediction models under development for the Chrono-Light Thermal Response project.">
+  <style>
+    body { margin:0; min-height:100vh; display:flex; flex-direction:column; font-family: Georgia, "Times New Roman", serif; color:#172033; background:radial-gradient(circle at top left,#fff6e8 0%,#eef4ff 52%,#f8fafc 100%); }
+    .page { width:min(100%, 1360px); margin:0 auto; padding:24px 28px 48px; box-sizing:border-box; flex:1 0 auto; }
+    .primaryBar { position:sticky; top:0; z-index:24; backdrop-filter:blur(16px); background:rgba(248,250,252,0.92); border-bottom:1px solid rgba(148,163,184,0.18); }
+    .primaryBarInner { width:min(100%, 1360px); margin:0 auto; padding:12px 28px; display:flex; align-items:center; justify-content:space-between; gap:16px; box-sizing:border-box; }
+    .logoLink { display:inline-flex; align-items:center; gap:12px; min-height:58px; text-decoration:none; }
+    .logoLink:hover { transform:translateY(-1px); }
+    .logoImage { width:58px; height:58px; object-fit:contain; display:block; flex-shrink:0; }
+    .logoWordmark { display:inline-flex; align-items:center; height:58px; font:700 2.1rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:-0.04em; color:#172033; }
+    .mastheadActions { display:flex; align-items:center; justify-content:flex-end; gap:12px; flex:1 1 auto; min-width:0; }
+    .menuWrap { position:relative; display:flex; align-items:center; }
+    .socialLinks { display:flex; align-items:center; justify-content:flex-end; gap:10px; flex-wrap:wrap; min-width:0; }
+    .socialLink { display:inline-flex; align-items:center; justify-content:center; min-height:44px; padding:0 16px; border-radius:999px; text-decoration:none; color:#172033; background:linear-gradient(180deg,rgba(255,255,255,0.96) 0%,rgba(255,247,237,0.96) 100%); border:1px solid rgba(251,146,60,0.28); box-shadow:0 12px 28px rgba(23,32,51,0.08); font:700 0.92rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:0.01em; }
+    .socialLink:hover { background:#ffffff; border-color:#fb923c; box-shadow:0 16px 34px rgba(23,32,51,0.12); transform:translateY(-1px); }
+    .menuButton { appearance:none; border:1px solid rgba(148,163,184,0.28); background:linear-gradient(180deg,rgba(255,255,255,0.96) 0%,rgba(255,247,237,0.96) 100%); color:#172033; border-radius:999px; min-height:44px; padding:0 14px; display:inline-flex; align-items:center; gap:10px; font:700 0.82rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:0.04em; cursor:pointer; box-shadow:0 12px 28px rgba(23,32,51,0.08); }
+    .menuButton:hover { background:#ffffff; border-color:#fb923c; box-shadow:0 16px 34px rgba(23,32,51,0.12); transform:translateY(-1px); }
+    .menuButtonBars { display:grid; gap:3px; }
+    .menuButtonBars span { display:block; width:14px; height:2px; border-radius:999px; background:currentColor; }
+    .menuPanel { position:absolute; right:0; top:calc(100% + 10px); width:min(220px, calc(100vw - 32px)); padding:0; background:transparent; border:0; border-radius:0; box-shadow:none; backdrop-filter:none; display:none; }
+    .menuPanel.open { display:grid; gap:10px; }
+    .menuPanel .socialLinks { display:grid; gap:8px; }
+    .menuPanel .socialLink { width:100%; min-height:40px; justify-content:flex-start; padding:10px 12px; border-radius:14px; font-size:0.82rem; line-height:1.2; box-sizing:border-box; box-shadow:0 10px 20px rgba(23,32,51,0.12); background:linear-gradient(135deg,rgba(255,255,255,0.98) 0%,rgba(255,243,224,0.98) 52%,rgba(255,232,214,0.98) 100%); border:1px solid rgba(251,146,60,0.34); }
+    .themeToggle { appearance:none; width:44px; height:44px; border-radius:999px; border:1px solid rgba(148,163,184,0.24); background:linear-gradient(180deg,rgba(255,255,255,0.96) 0%,rgba(255,247,237,0.96) 100%); color:#172033; box-shadow:0 12px 28px rgba(23,32,51,0.08); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .themeToggle:hover { background:#ffffff; border-color:#fb923c; box-shadow:0 16px 34px rgba(23,32,51,0.12); transform:translateY(-1px); }
+    .themeToggleIconDark,.themeToggleIconLight { font-size:1.05rem; line-height:1; }
+    .themeToggleIconLight { display:none; }
+    body.theme-dark { color:#e5edf7; background:radial-gradient(circle at top left,#0f172a 0%,#111827 52%,#020617 100%); }
+    body.theme-dark .primaryBar { background:rgba(15,23,42,0.9); border-bottom-color:rgba(71,85,105,0.42); }
+    body.theme-dark .logoWordmark,body.theme-dark .title,body.theme-dark .sectionTitle { color:#f8fafc; }
+    body.theme-dark .subtitle,body.theme-dark .sectionText,body.theme-dark .statusText,body.theme-dark .cardText,body.theme-dark .eyebrow { color:#cbd5e1; }
+    body.theme-dark .panel,body.theme-dark .card,body.theme-dark .statusPanel { background:rgba(15,23,42,0.88); border-color:rgba(71,85,105,0.38); box-shadow:0 18px 44px rgba(2,6,23,0.38); }
+    body.theme-dark .socialLink,body.theme-dark .themeToggle,body.theme-dark .menuButton { color:#f8fafc; background:linear-gradient(180deg,rgba(30,41,59,0.96) 0%,rgba(15,23,42,0.96) 100%); border-color:rgba(71,85,105,0.5); }
+    body.theme-dark .menuPanel .socialLink { background:linear-gradient(135deg,rgba(30,41,59,0.98) 0%,rgba(37,99,235,0.34) 58%,rgba(15,23,42,0.98) 100%); border-color:rgba(96,165,250,0.34); box-shadow:0 10px 22px rgba(2,6,23,0.34); }
+    body.theme-dark .themeToggleIconDark { display:none; }
+    body.theme-dark .themeToggleIconLight { display:inline; }
+    .hero { display:grid; grid-template-columns:minmax(0,1.05fr) minmax(320px,0.95fr); gap:18px; align-items:stretch; }
+    .panel,.card,.statusPanel { background:rgba(255,255,255,0.9); border:1px solid rgba(148,163,184,0.24); border-radius:22px; box-shadow:0 18px 44px rgba(23,32,51,0.08); padding:22px 24px; backdrop-filter:blur(8px); }
+    .heroLead { position:relative; overflow:hidden; background:linear-gradient(135deg,#172033 0%,#0f766e 45%,#0ea5e9 100%); border-color:rgba(153,246,228,0.28); color:#eff6ff; }
+    .heroLead::before { content:""; position:absolute; inset:0; background:radial-gradient(circle at top right,rgba(255,255,255,0.24) 0%,rgba(255,255,255,0) 42%); z-index:0; }
+    .heroLead > * { position:relative; z-index:1; }
+    .eyebrow { margin:0 0 8px; color:#d1fae5; font:700 0.74rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:0.18em; text-transform:uppercase; }
+    .title { margin:0 0 10px; font-size:2.4rem; line-height:1.04; letter-spacing:-0.04em; color:#f8fafc; }
+    .subtitle { margin:0; max-width:58ch; color:#eff6ff; line-height:1.7; font-size:1.02rem; }
+    .statusPanel { display:grid; gap:14px; background:linear-gradient(180deg,#f8fafc 0%,#ecfeff 100%); }
+    .statusBadge { display:inline-flex; align-items:center; justify-content:center; width:fit-content; min-height:34px; padding:0 12px; border-radius:999px; background:rgba(13,148,136,0.12); border:1px solid rgba(13,148,136,0.22); color:#115e59; font:700 0.76rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:0.08em; text-transform:uppercase; }
+    .statusText { margin:0; color:#475569; line-height:1.72; }
+    .cardGrid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; margin-top:18px; }
+    .sectionTitle { margin:0 0 10px; color:#172033; font-size:1.34rem; line-height:1.2; }
+    .sectionText,.cardText { margin:0; color:#475569; line-height:1.72; }
+    .cardLabel { margin:0 0 8px; color:#0f766e; font:700 0.74rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:0.14em; text-transform:uppercase; }
+    .copyrightNote { width:min(100%, 1360px); margin:0 auto; padding:0 clamp(16px,2.4vw,28px) 18px; box-sizing:border-box; text-align:center; color:#64748b; font:500 0.84rem/1.5 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body.theme-dark .copyrightNote { color:#94a3b8; }
+    @media (max-width:1000px) { .page { padding:20px 16px 40px; } .hero,.cardGrid { grid-template-columns:1fr; } }
+    @media (max-width:860px) { .primaryBarInner { flex-wrap:wrap; padding:12px 20px; } .mastheadActions { width:100%; justify-content:flex-end; } }
+    @media (max-width:640px) { .mastheadActions { width:auto; } .menuPanel { right:0; left:auto; width:min(280px, calc(100vw - 24px)); } .logoImage { width:52px; height:52px; } .logoWordmark { height:52px; font-size:1.9rem; } }
+  </style>
+</head>
+<body>
+  <header class="primaryBar">
+    <div class="primaryBarInner">
+      <a class="logoLink" href="./index.html" title="Open CLTR homepage" aria-label="Open CLTR homepage">
+        <img class="logoImage" src="./assets/logos/cltr.png" alt="CLTR logo">
+        <span class="logoWordmark">CLTR</span>
+      </a>
+      <div class="mastheadActions">
+        <div class="menuWrap">
+          <button class="menuButton" id="siteMenuButton" type="button" aria-expanded="false" aria-controls="siteMenuPanel" aria-label="Open site menu">
+            <span class="menuButtonBars" aria-hidden="true"><span></span><span></span><span></span></span>
+            <span>Menu</span>
+          </button>
+          <div class="menuPanel" id="siteMenuPanel" role="menu" aria-label="Site navigation">
+            <div class="socialLinks">
+              <a class="socialLink" href="./exp.html" title="Open Experiment" role="menuitem"><span>Experiment</span></a>
+              <a class="socialLink" href="./publication.html" title="Open Publication" role="menuitem"><span>Publication</span></a>
+              <a class="socialLink" href="https://github.com/tomarp/cltr" title="Open GitHub" target="_blank" rel="noopener noreferrer" role="menuitem"><span>GitHub</span></a>
+              <a class="socialLink" href="https://doi.org/10.5281/zenodo.17817175" title="Open Zenodo" target="_blank" rel="noopener noreferrer" role="menuitem"><span>Zenodo</span></a>
+              <a class="socialLink" href="https://github.com/tomarp/cltr/tree/main/framework" title="Open Framework" target="_blank" rel="noopener noreferrer" role="menuitem"><span>Framework</span></a>
+            </div>
+          </div>
+        </div>
+        <button class="themeToggle" id="themeToggle" type="button" aria-label="Toggle dark mode"><span class="themeToggleIconDark" aria-hidden="true">◐</span><span class="themeToggleIconLight" aria-hidden="true">◑</span></button>
+      </div>
+    </div>
+  </header>
+  <main class="page">
+    <section class="hero">
+      <section class="panel heroLead">
+        <p class="eyebrow">Prediction Models</p>
+        <h1 class="title">ML Prediction Models</h1>
+        <p class="subtitle">This page is reserved for the CLTR machine-learning workstream, where predictive models will connect multimodal physiology, indoor environmental measurements, and participant-reported outcomes into reusable forecasting and classification pipelines.</p>
+      </section>
+      <section class="statusPanel">
+        <span class="statusBadge">In Progress</span>
+        <p class="statusText">The prediction-model page is being developed. It will evolve into the public-facing hub for model objectives, feature groups, training datasets, validation strategy, performance summaries, and deployment-ready artifacts.</p>
+        <p class="statusText">For now, the CLTR website keeps this placeholder so the page structure is stable while the modeling outputs are still under active development.</p>
+      </section>
+    </section>
+    <section class="cardGrid">
+      <section class="card">
+        <p class="cardLabel">Planned Scope</p>
+        <h2 class="sectionTitle">Prediction targets</h2>
+        <p class="cardText">This page will document models for physiological response, thermal perception, fan behavior, and multimodal state prediction derived from synchronized CLTR sessions.</p>
+      </section>
+      <section class="card">
+        <p class="cardLabel">Modeling Stack</p>
+        <h2 class="sectionTitle">ML workflow</h2>
+        <p class="cardText">The future content will cover feature engineering, dataset splitting, baseline and advanced learners, calibration, interpretability, and reproducible evaluation across conditions.</p>
+      </section>
+      <section class="card">
+        <p class="cardLabel">Public Release</p>
+        <h2 class="sectionTitle">Outputs to come</h2>
+        <p class="cardText">Expected additions include benchmark tables, model cards, inference examples, and links to framework components that support end-to-end predictive analysis.</p>
+      </section>
+    </section>
+  </main>
+  <div class="copyrightNote">&copy; 2026 Puneet Tomar. All rights reserved.</div>
+</body>
+<script>
+const themeToggle=document.getElementById('themeToggle');
+const siteMenuButton=document.getElementById('siteMenuButton');
+const siteMenuPanel=document.getElementById('siteMenuPanel');
+const storedTheme=window.localStorage.getItem('cltr-theme');
+if(storedTheme==='dark'){document.body.classList.add('theme-dark');}
+const syncThemeIcon=()=>{if(themeToggle){themeToggle.setAttribute('aria-pressed', document.body.classList.contains('theme-dark') ? 'true' : 'false');}};
+const closeSiteMenu=()=>{if(!siteMenuPanel||!siteMenuButton)return;siteMenuPanel.classList.remove('open');siteMenuButton.setAttribute('aria-expanded','false');};
+const toggleSiteMenu=()=>{if(!siteMenuPanel||!siteMenuButton)return;const open=siteMenuPanel.classList.toggle('open');siteMenuButton.setAttribute('aria-expanded',open?'true':'false');};
+syncThemeIcon();
+if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classList.toggle('theme-dark');window.localStorage.setItem('cltr-theme', document.body.classList.contains('theme-dark') ? 'dark' : 'light');syncThemeIcon();});}
+if(siteMenuButton&&siteMenuPanel){siteMenuButton.addEventListener('click',(event)=>{event.stopPropagation();toggleSiteMenu();});siteMenuPanel.querySelectorAll('a').forEach(link=>link.addEventListener('click',closeSiteMenu));document.addEventListener('click',(event)=>{if(!siteMenuPanel.contains(event.target)&&!siteMenuButton.contains(event.target))closeSiteMenu();});document.addEventListener('keydown',(event)=>{if(event.key==='Escape')closeSiteMenu();});}
+if(window.location.pathname.endsWith("/index.html")){const cleanPath=window.location.pathname.slice(0,-"index.html".length)||"/";window.history.replaceState({},"",cleanPath+window.location.search+window.location.hash);}
+</script>
+</html>

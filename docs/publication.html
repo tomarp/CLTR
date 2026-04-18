@@ -15,9 +15,18 @@
     .logoImage { width:58px; height:58px; object-fit:contain; display:block; flex-shrink:0; }
     .logoWordmark { display:inline-flex; align-items:center; height:58px; font:700 2.1rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:-0.04em; color:#172033; }
     .mastheadActions { display:flex; align-items:center; justify-content:flex-end; gap:12px; flex:1 1 auto; min-width:0; }
+    .menuWrap { position:relative; display:flex; align-items:center; }
     .socialLinks { display:flex; align-items:center; justify-content:flex-end; gap:10px; flex-wrap:wrap; min-width:0; }
     .socialLink { display:inline-flex; align-items:center; justify-content:center; min-height:44px; padding:0 16px; border-radius:999px; text-decoration:none; color:#172033; background:linear-gradient(180deg,rgba(255,255,255,0.96) 0%,rgba(255,247,237,0.96) 100%); border:1px solid rgba(251,146,60,0.28); box-shadow:0 12px 28px rgba(23,32,51,0.08); font:700 0.92rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:0.01em; }
     .socialLink:hover { background:#ffffff; border-color:#fb923c; box-shadow:0 16px 34px rgba(23,32,51,0.12); transform:translateY(-1px); }
+    .menuButton { appearance:none; border:1px solid rgba(148,163,184,0.28); background:linear-gradient(180deg,rgba(255,255,255,0.96) 0%,rgba(255,247,237,0.96) 100%); color:#172033; border-radius:999px; min-height:44px; padding:0 14px; display:inline-flex; align-items:center; gap:10px; font:700 0.82rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:0.04em; cursor:pointer; box-shadow:0 12px 28px rgba(23,32,51,0.08); }
+    .menuButton:hover { background:#ffffff; border-color:#fb923c; box-shadow:0 16px 34px rgba(23,32,51,0.12); transform:translateY(-1px); }
+    .menuButtonBars { display:grid; gap:3px; }
+    .menuButtonBars span { display:block; width:14px; height:2px; border-radius:999px; background:currentColor; }
+    .menuPanel { position:absolute; right:0; top:calc(100% + 10px); width:min(220px, calc(100vw - 32px)); padding:0; background:transparent; border:0; border-radius:0; box-shadow:none; backdrop-filter:none; display:none; }
+    .menuPanel.open { display:grid; gap:10px; }
+    .menuPanel .socialLinks { display:grid; gap:8px; }
+    .menuPanel .socialLink { width:100%; min-height:40px; justify-content:flex-start; padding:10px 12px; border-radius:14px; font-size:0.82rem; line-height:1.2; box-sizing:border-box; box-shadow:0 10px 20px rgba(23,32,51,0.12); background:linear-gradient(135deg,rgba(255,255,255,0.98) 0%,rgba(255,243,224,0.98) 52%,rgba(255,232,214,0.98) 100%); border:1px solid rgba(251,146,60,0.34); }
     .themeToggle { appearance:none; width:44px; height:44px; border-radius:999px; border:1px solid rgba(148,163,184,0.24); background:linear-gradient(180deg,rgba(255,255,255,0.96) 0%,rgba(255,247,237,0.96) 100%); color:#172033; box-shadow:0 12px 28px rgba(23,32,51,0.08); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
     .themeToggle:hover { background:#ffffff; border-color:#fb923c; box-shadow:0 16px 34px rgba(23,32,51,0.12); transform:translateY(-1px); }
     .themeToggleIconDark,.themeToggleIconLight { font-size:1.05rem; line-height:1; }
@@ -27,7 +36,8 @@
     body.theme-dark .logoWordmark,body.theme-dark .title,body.theme-dark .pubTitle { color:#f8fafc; }
     body.theme-dark .subtitle,body.theme-dark .pubAuthors,body.theme-dark .pubJournal,body.theme-dark .pubText { color:#cbd5e1; }
     body.theme-dark .panel,body.theme-dark .pubLink { background:rgba(15,23,42,0.88); border-color:rgba(71,85,105,0.38); box-shadow:0 18px 44px rgba(2,6,23,0.38); }
-    body.theme-dark .socialLink,body.theme-dark .themeToggle { color:#f8fafc; background:linear-gradient(180deg,rgba(30,41,59,0.96) 0%,rgba(15,23,42,0.96) 100%); border-color:rgba(71,85,105,0.5); }
+    body.theme-dark .socialLink,body.theme-dark .themeToggle,body.theme-dark .menuButton { color:#f8fafc; background:linear-gradient(180deg,rgba(30,41,59,0.96) 0%,rgba(15,23,42,0.96) 100%); border-color:rgba(71,85,105,0.5); }
+    body.theme-dark .menuPanel .socialLink { background:linear-gradient(135deg,rgba(30,41,59,0.98) 0%,rgba(37,99,235,0.34) 58%,rgba(15,23,42,0.98) 100%); border-color:rgba(96,165,250,0.34); box-shadow:0 10px 22px rgba(2,6,23,0.34); }
     body.theme-dark .pubTag { background:rgba(30,41,59,0.96); border-color:rgba(71,85,105,0.44); color:#f8fafc; }
     body.theme-dark .themeToggleIconDark { display:none; }
     body.theme-dark .themeToggleIconLight { display:inline; }
@@ -51,8 +61,8 @@
     .copyrightNote { width:min(100%, 1360px); margin:0 auto; padding:0 clamp(16px,2.4vw,28px) 18px; box-sizing:border-box; text-align:center; color:#64748b; font:500 0.84rem/1.5 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     body.theme-dark .copyrightNote { color:#94a3b8; }
     @media (max-width:1000px) { .page { padding:20px 16px 40px; } }
-    @media (max-width:860px) { .primaryBarInner { flex-wrap:wrap; padding:12px 20px; } .mastheadActions { width:100%; justify-content:space-between; } }
-    @media (max-width:640px) { .mastheadActions { display:grid; gap:10px; } .socialLinks { width:100%; justify-content:stretch; } .socialLink { flex:1 1 calc(50% - 10px); min-width:0; } .logoImage { width:52px; height:52px; } .logoWordmark { height:52px; font-size:1.9rem; } }
+    @media (max-width:860px) { .primaryBarInner { flex-wrap:wrap; padding:12px 20px; } .mastheadActions { width:100%; justify-content:flex-end; } }
+    @media (max-width:640px) { .mastheadActions { width:auto; } .menuPanel { right:0; left:auto; width:min(280px, calc(100vw - 24px)); } .logoImage { width:52px; height:52px; } .logoWordmark { height:52px; font-size:1.9rem; } }
   </style>
 </head>
 <body>
@@ -63,11 +73,20 @@
         <span class="logoWordmark">CLTR</span>
       </a>
       <div class="mastheadActions">
-        <div class="socialLinks">
-          <a class="socialLink" href="./publication.html" title="Open Publication"><span>Publication</span></a>
-          <a class="socialLink" href="https://github.com/tomarp/cltr" title="Open GitHub" target="_blank" rel="noopener noreferrer"><span>GitHub</span></a>
-          <a class="socialLink" href="https://doi.org/10.5281/zenodo.17817175" title="Open Zenodo" target="_blank" rel="noopener noreferrer"><span>Zenodo</span></a>
-          <a class="socialLink" href="https://github.com/tomarp/cltr/tree/main/framework" title="Open Framework" target="_blank" rel="noopener noreferrer"><span>Framework</span></a>
+        <div class="menuWrap">
+          <button class="menuButton" id="siteMenuButton" type="button" aria-expanded="false" aria-controls="siteMenuPanel" aria-label="Open site menu">
+            <span class="menuButtonBars" aria-hidden="true"><span></span><span></span><span></span></span>
+            <span>Menu</span>
+          </button>
+          <div class="menuPanel" id="siteMenuPanel" role="menu" aria-label="Site navigation">
+            <div class="socialLinks">
+              <a class="socialLink" href="./exp.html" title="Open Experiment" role="menuitem"><span>Experiment</span></a>
+              <a class="socialLink" href="./publication.html" title="Open Publication" role="menuitem"><span>Publication</span></a>
+              <a class="socialLink" href="https://github.com/tomarp/cltr" title="Open GitHub" target="_blank" rel="noopener noreferrer" role="menuitem"><span>GitHub</span></a>
+              <a class="socialLink" href="https://doi.org/10.5281/zenodo.17817175" title="Open Zenodo" target="_blank" rel="noopener noreferrer" role="menuitem"><span>Zenodo</span></a>
+              <a class="socialLink" href="https://github.com/tomarp/cltr/tree/main/framework" title="Open Framework" target="_blank" rel="noopener noreferrer" role="menuitem"><span>Framework</span></a>
+            </div>
+          </div>
         </div>
         <button class="themeToggle" id="themeToggle" type="button" aria-label="Toggle dark mode"><span class="themeToggleIconDark" aria-hidden="true">◐</span><span class="themeToggleIconLight" aria-hidden="true">◑</span></button>
       </div>
@@ -117,11 +136,16 @@
 </body>
 <script>
 const themeToggle=document.getElementById('themeToggle');
+const siteMenuButton=document.getElementById('siteMenuButton');
+const siteMenuPanel=document.getElementById('siteMenuPanel');
 const storedTheme=window.localStorage.getItem('cltr-theme');
 if(storedTheme==='dark'){document.body.classList.add('theme-dark');}
 const syncThemeIcon=()=>{if(themeToggle){themeToggle.setAttribute('aria-pressed', document.body.classList.contains('theme-dark') ? 'true' : 'false');}};
+const closeSiteMenu=()=>{if(!siteMenuPanel||!siteMenuButton)return;siteMenuPanel.classList.remove('open');siteMenuButton.setAttribute('aria-expanded','false');};
+const toggleSiteMenu=()=>{if(!siteMenuPanel||!siteMenuButton)return;const open=siteMenuPanel.classList.toggle('open');siteMenuButton.setAttribute('aria-expanded',open?'true':'false');};
 syncThemeIcon();
 if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classList.toggle('theme-dark');window.localStorage.setItem('cltr-theme', document.body.classList.contains('theme-dark') ? 'dark' : 'light');syncThemeIcon();});}
+if(siteMenuButton&&siteMenuPanel){siteMenuButton.addEventListener('click',(event)=>{event.stopPropagation();toggleSiteMenu();});siteMenuPanel.querySelectorAll('a').forEach(link=>link.addEventListener('click',closeSiteMenu));document.addEventListener('click',(event)=>{if(!siteMenuPanel.contains(event.target)&&!siteMenuButton.contains(event.target))closeSiteMenu();});document.addEventListener('keydown',(event)=>{if(event.key==='Escape')closeSiteMenu();});}
 if(window.location.pathname.endsWith("/index.html")){const cleanPath=window.location.pathname.slice(0,-"index.html".length)||"/";window.history.replaceState({},"",cleanPath+window.location.search+window.location.hash);}
 </script>
 </html>
