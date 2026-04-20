@@ -273,12 +273,12 @@ def publish_atlas(results_dir: str | Path, docs_atlas_dir: str | Path, target: s
             _ensure_hide_index_html(sessions_report_target)
         for html_path in (target_dir / "cohort").rglob("*.html"):
             _rewrite_text(html_path, [("../../work/index.html", "../../../index.html")])
-            _sync_primary_header(html_path, "../../../index.html", "../../../publication.html", "../../../assets/logos/cltr.png")
+            _sync_primary_header(html_path, "../../index.html", "../../publication.html", "../../assets/logos/cltr.png")
             _ensure_primary_menu(html_path)
             _ensure_hide_index_html(html_path)
         for html_path in (target_dir / "sessions").rglob("*.html"):
             _rewrite_text(html_path, [("../../../work/index.html", "../../../../index.html")])
-            _sync_primary_header(html_path, "../../../../index.html", "../../../../publication.html", "../../../../assets/logos/cltr.png")
+            _sync_primary_header(html_path, "../../../index.html", "../../../publication.html", "../../../assets/logos/cltr.png")
             _ensure_primary_menu(html_path)
             _ensure_hide_index_html(html_path)
     else:
