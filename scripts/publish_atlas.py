@@ -74,10 +74,9 @@ def _normalize_atlas_home_logo(path: Path) -> None:
         start = text.find(anchor)
         if start == -1:
             continue
-        svg_start = text.find("<svg class='logoMark'", start)
-        end = text.find("</svg><span class='logoWordmark'>CLTR</span></a>", svg_start)
-        if svg_start != -1 and end != -1:
-            end += len("</svg><span class='logoWordmark'>CLTR</span></a>")
+        end = text.find("</a>", start)
+        if end != -1:
+            end += len("</a>")
             text = text[:start] + replacement + text[end:]
             break
     path.write_text(text, encoding="utf-8")
@@ -109,17 +108,10 @@ def _sync_primary_header(path: Path, home_href: str, publication_href: str, logo
         start = text.find(anchor)
         if start == -1:
             continue
-        svg_start = text.find("<svg class='logoMark'", start)
-        end = text.find("</svg><span class='logoWordmark'>CLTR</span></a>", svg_start)
-        if svg_start != -1 and end != -1:
-            end += len("</svg><span class='logoWordmark'>CLTR</span></a>")
+        end = text.find("</a>", start)
+        if end != -1:
+            end += len("</a>")
             text = text[:start] + replacement + text[end:]
-            break
-        img_start = text.find("<img class='logoImage'", start)
-        img_end = text.find("</a>", img_start)
-        if img_start != -1 and img_end != -1:
-            img_end += len("</a>")
-            text = text[:start] + replacement + text[img_end:]
             break
     github_link = (
         "<a class='socialLink' href='https://github.com/tomarp/cltr' title='Open GitHub' "
