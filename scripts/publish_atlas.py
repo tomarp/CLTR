@@ -159,6 +159,19 @@ def _ensure_primary_menu(path: Path) -> None:
         ".menuPanel { position:absolute; right:0; top:calc(100% + 10px); width:min(420px, calc(100vw - 32px)); max-height:min(70vh, 720px); overflow:auto; padding:14px 12px; background:rgba(255,255,255,0.97); border:1px solid rgba(148,163,184,0.22); border-radius:22px; box-shadow:0 22px 54px rgba(23,32,51,0.16); backdrop-filter:blur(18px); display:none; }\n",
         ".menuPanel { position:absolute; right:0; top:calc(100% + 10px); width:min(220px, calc(100vw - 32px)); max-height:min(70vh, 720px); overflow:auto; padding:0; background:transparent; border:0; border-radius:0; box-shadow:none; backdrop-filter:none; display:none; }\n",
     )
+    secondary_menu_block = (
+        ".secondaryBarActions .menuPanel { position:absolute; right:0; top:calc(100% + 10px); width:min(420px, calc(100vw - 32px)); "
+        "max-height:min(70vh, 720px); overflow:auto; padding:14px 12px; background:rgba(255,255,255,0.97); "
+        "border:1px solid rgba(148,163,184,0.22); border-radius:22px; box-shadow:0 22px 54px rgba(23,32,51,0.16); "
+        "backdrop-filter:blur(18px); display:none; }\n"
+        ".secondaryBarActions .menuPanel.open { display:grid; gap:10px; }\n"
+        ".secondaryBarActions .menuTitle { margin:0 0 2px; font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; "
+        "font-size:0.78rem; letter-spacing:0.14em; text-transform:uppercase; color:#64748b; }\n"
+        "body.theme-dark .secondaryBarActions .menuPanel { background:rgba(15,23,42,0.96); border-color:rgba(71,85,105,0.4); }\n"
+        "body.theme-dark .secondaryBarActions .menuTitle { color:#94a3b8; }\n"
+    )
+    if ".secondaryBarActions .menuPanel {" not in text:
+        text = text.replace(".menuPanel.open { display:grid; gap:10px; }\n", ".menuPanel.open { display:grid; gap:10px; }\n" + secondary_menu_block, 1)
     text = text.replace("body.theme-dark .menuPanel { background:rgba(15,23,42,0.96); border-color:rgba(71,85,105,0.4); }\n", "")
     text = text.replace(
         ".socialLinks { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }\n",

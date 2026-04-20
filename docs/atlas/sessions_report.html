@@ -47,6 +47,10 @@ body.theme-dark .themeToggleIconLight { display:inline; }
 .menuButtonBars span { display:block; width:14px; height:2px; border-radius:999px; background:currentColor; }
 .menuPanel { position:absolute; right:0; top:calc(100% + 10px); width:min(220px, calc(100vw - 32px)); max-height:min(70vh, 720px); overflow:auto; padding:0; background:transparent; border:0; border-radius:0; box-shadow:none; backdrop-filter:none; display:none; }
 .menuPanel.open { display:grid; gap:10px; }
+.secondaryBarActions .menuPanel { position:absolute; right:0; top:calc(100% + 10px); width:min(420px, calc(100vw - 32px)); max-height:min(70vh, 720px); overflow:auto; padding:14px 12px; background:rgba(255,255,255,0.97); border:1px solid rgba(148,163,184,0.22); border-radius:22px; box-shadow:0 22px 54px rgba(23,32,51,0.16); backdrop-filter:blur(18px); display:none; }
+.secondaryBarActions .menuPanel.open { display:grid; gap:10px; }
+.secondaryBarActions body.theme-dark .secondaryBarActions .menuPanel { background:rgba(15,23,42,0.96); border-color:rgba(71,85,105,0.4); }
+body.theme-dark .secondaryBarActions .menuTitle { color:#94a3b8; }
 .nav { display:grid; gap:14px; }
 .navList { display:grid; grid-template-columns:1fr; gap:10px; }
 .nav a { width:100%; min-height:44px; text-decoration:none; color:#172033; background:rgba(255,247,237,0.95); border:1px solid #fed7aa; border-radius:14px; display:grid; grid-template-columns:auto minmax(0,1fr); align-items:start; gap:10px; padding:10px 12px; font-size:0.72rem; font-weight:700; font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height:1.2; box-shadow:inset 0 0 0 4px rgba(255,255,255,0.96); box-sizing:border-box; }
