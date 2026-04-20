@@ -2,14 +2,27 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
+from textwrap import fill
 
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
+import matplotlib.transforms as mtransforms
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.colors import BoundaryNorm, LinearSegmentedColormap, ListedColormap
+from matplotlib.patches import Patch, Rectangle
 from plotly.offline.offline import get_plotlyjs
 
+plt.rcParams["figure.max_open_warning"] = 0
+
+from .analysis import (
+    ANALYTIC_FEATURES,
+    PRIMARY_ENDPOINTS,
+    SUPPORT_GRADED_ENDPOINTS,
+    endpoint_is_primary,
+    endpoint_policy_role,
+)
 from .config import CLTRConfig
 from .utils import ensure_dir, html_escape, parse_any_datetime, parse_local_datetime, safe_read_csv, to_numeric
 
@@ -45,7 +58,10 @@ FEATURE_LABELS = {
     "thermal_sensation": "Thermal Sensation",
     "thermal_preference": "Thermal Preference",
     "thermal_pleasure": "Thermal Pleasure",
+    "visual_sensation": "Visual Sensation",
+    "color_sensation": "Color Sensation",
     "visual_comfort": "Visual Comfort",
+    "sound_comfort_dbA": "Sound Comfort",
     "air_quality_comfort": "Air Quality Comfort",
     "room_comfort": "Room Comfort",
     "empatica_hr_mean_bpm": "Empatica HR",
@@ -55,14 +71,107 @@ FEATURE_LABELS = {
     "empatica_temp_mean_C": "Empatica Temperature",
     "biopac_temp_chest_mean_C": "Chest Temperature",
     "indoor_relative_humidity_percent": "Indoor RH",
+    "outdoor_air_temp_C": "Outdoor Air Temperature",
+    "outdoor_relative_humidity_percent": "Outdoor Relative Humidity",
+    "outdoor_wind_speed_m_s": "Outdoor Wind Speed",
+    "outdoor_solar_radiation_W_m2": "Solar Radiation",
     "biopac_bloodflow_mean_bpu": "Blood Flow",
     "indoor_air_velocity_mean_m_s": "Air Velocity",
     "indoor_air_temp_mean_C": "Indoor Air Temperature",
     "fan_control_au": "Fan Control",
     "fan_control_secondary_au": "Secondary Fan Control",
     "fan_current_A": "Fan Current",
-    "master_dpg_C": "DPG",
+    "master_skin_chest_C": "Master Skin Chest Temperature",
+    "master_hand_C": "Hand Temperature",
+    "master_dpg_C": "Distal-Proximal Gradient",
     "thermal_gradient_C": "Distal-Proximal Gradient",
+    "thermal_state_index_C": "Thermal State Index",
+    "hr_delta_bpm": "Heart-Rate Delta",
+    "eda_delta_uS": "Electrodermal Delta",
+    "temp_delta_C": "Temperature Delta",
+    "thermal_comfort_state": "Thermal Comfort State",
+    "thermal_sensation_state": "Thermal Sensation State",
+}
+AXIS_LABELS = {
+    "thermal_comfort": "Thermal Comfort Response (ordinal scale)",
+    "thermal_sensation": "Thermal Sensation Vote (ordinal scale)",
+    "thermal_preference": "Thermal Preference Vote (ordinal scale)",
+    "thermal_pleasure": "Thermal Pleasure Response (ordinal scale)",
+    "visual_sensation": "Visual Sensation Vote (ordinal scale)",
+    "color_sensation": "Color Sensation Vote (ordinal scale)",
+    "visual_comfort": "Visual Comfort Response (ordinal scale)",
+    "sound_comfort_dbA": "Sound Comfort Response (ordinal scale)",
+    "air_quality_comfort": "Air-Quality Comfort Response (ordinal scale)",
+    "room_comfort": "Room Comfort Response (ordinal scale)",
+    "empatica_hr_mean_bpm": "Empatica Heart Rate (bpm)",
+    "biopac_hr_mean_bpm": "BIOPAC Heart Rate (bpm)",
+    "empatica_eda_mean_uS": "Empatica Electrodermal Activity (uS)",
+    "biopac_eda_mean_uS": "BIOPAC Electrodermal Activity (uS)",
+    "empatica_temp_mean_C": "Empatica Skin Temperature (C)",
+    "biopac_temp_chest_mean_C": "BIOPAC Chest Temperature (C)",
+    "biopac_temp_thigh_mean_C": "BIOPAC Thigh Temperature (C)",
+    "biopac_temp_arm_mean_C": "BIOPAC Arm Temperature (C)",
+    "biopac_temp_tibia_mean_C": "BIOPAC Tibia Temperature (C)",
+    "empatica_bvp_mean": "Empatica Blood Volume Pulse (nW)",
+    "empatica_acc_mean_g": "Empatica Acceleration (g)",
+    "empatica_enmo_mean_g": "Empatica ENMO (g)",
+    "empatica_steps": "Empatica Steps (count)",
+    "biopac_bloodflow_mean_bpu": "BIOPAC Blood Flow (BPU)",
+    "biopac_backscatter_mean_percent": "BIOPAC Backscatter (%)",
+    "indoor_air_velocity_mean_m_s": "Indoor Air Velocity (m/s)",
+    "indoor_air_temp_mean_C": "Indoor Air Temperature (C)",
+    "indoor_relative_humidity_percent": "Indoor Relative Humidity (%)",
+    "outdoor_air_temp_C": "Outdoor Air Temperature (C)",
+    "outdoor_relative_humidity_percent": "Outdoor Relative Humidity (%)",
+    "outdoor_wind_speed_m_s": "Outdoor Wind Speed (m/s)",
+    "outdoor_solar_radiation_W_m2": "Solar Radiation (W/m2)",
+    "fan_control_au": "Fan Control Setting (a.u.)",
+    "fan_control_secondary_au": "Secondary Fan Control Setting (a.u.)",
+    "fan_current_A": "Fan Current (A)",
+    "master_dpg_C": "Distal-Proximal Gradient (C)",
+    "thermal_gradient_C": "Thermal Gradient (C)",
+}
+REPORT_METRIC_LABELS = {
+    "empatica_bvp_mean": "Empatica BVP",
+    "empatica_hr_mean_bpm": "Empatica HR",
+    "empatica_eda_mean_uS": "Empatica EDA",
+    "empatica_temp_mean_C": "Empatica Temperature",
+    "empatica_acc_mean_g": "Empatica Acceleration",
+    "empatica_enmo_mean_g": "Empatica ENMO",
+    "empatica_steps": "Empatica Steps",
+    "biopac_hr_mean_bpm": "BIOPAC HR",
+    "biopac_eda_mean_uS": "BIOPAC EDA",
+    "biopac_temp_chest_mean_C": "BIOPAC Chest Temperature",
+    "biopac_temp_thigh_mean_C": "BIOPAC Thigh Temperature",
+    "biopac_temp_arm_mean_C": "BIOPAC Arm Temperature",
+    "biopac_temp_tibia_mean_C": "BIOPAC Tibia Temperature",
+    "biopac_bloodflow_mean_bpu": "BIOPAC Blood Flow",
+    "biopac_backscatter_mean_percent": "BIOPAC Backscatter",
+    "indoor_air_temp_mean_C": "Indoor Air Temperature",
+    "indoor_air_velocity_mean_m_s": "Indoor Air Velocity",
+    "indoor_relative_humidity_percent": "Indoor Relative Humidity",
+    "outdoor_air_temp_C": "Outdoor Air Temperature",
+    "outdoor_relative_humidity_percent": "Outdoor Relative Humidity",
+    "outdoor_wind_speed_m_s": "Outdoor Wind Speed",
+    "outdoor_solar_radiation_W_m2": "Solar Radiation",
+    "fan_control_au": "Fan Control",
+    "fan_control_secondary_au": "Secondary Fan Control",
+    "fan_current_A": "Fan Current",
+    "thermal_sensation": "Thermal Sensation",
+    "thermal_comfort": "Thermal Comfort",
+    "thermal_preference": "Thermal Preference",
+    "thermal_pleasure": "Thermal Pleasure",
+    "visual_sensation": "Visual Sensation",
+    "color_sensation": "Color Sensation",
+    "visual_comfort": "Visual Comfort",
+    "sound_comfort_dbA": "Sound Comfort",
+    "air_quality_comfort": "Air-Quality Comfort",
+    "room_comfort": "Room Comfort",
+}
+REPORT_METRIC_KINDS = {
+    "fan_control_au": "trajectory",
+    "fan_control_secondary_au": "trajectory",
+    "fan_current_A": "trajectory",
 }
 WORK_INDEX_TITLE = "CLTR Atlas"
 WORK_INDEX_SUBTITLE = "Explore the study-wide summary and every individual session in one place."
@@ -70,7 +179,7 @@ WORK_HOME_TITLE = "CLTR"
 WORK_HOME_SUBTITLE = "Controlled Laboratory Thermal Response"
 SESSION_CTA = "Open session report"
 COHORT_CTA = "Open cohort report"
-COPYRIGHT_NOTE = "&copy; 2026 Puneet Tomar. All rights reserved."
+COPYRIGHT_NOTE = "&copy; 2026 Tomar & Elkounni. All rights reserved."
 PROJECT_GITHUB_URL = "https://github.com/tomarp/cltr"
 PROJECT_ZENODO_URL = "https://doi.org/10.5281/zenodo.17817175"
 PROJECT_FRAMEWORK_URL = "https://github.com/tomarp/cltr/tree/main/framework"
@@ -80,7 +189,7 @@ BLOCK_PHASE_NARRATIVE_THRESHOLD = 2
 COMPARISON_BLOCKS = {"1", "2", "3"}
 SECTION_TITLES = {
     "frontmatter": "Overview",
-    "subjective_behavioral": "Subjective And Behavioral Data",
+    "subjective_behavioral": "Questionnaire Responses And Fan Behavior",
     "physiological": "Physiological Data",
     "environmental": "Environmental Data",
     "processed_cleaned": "Processed And Cleaned Signals",
@@ -88,7 +197,7 @@ SECTION_TITLES = {
     "derived": "Derived Results",
     "agreement_section": "Relationships And Validation",
     "raw": "Measured Trends",
-    "analyzed": "Derived Results",
+    "analyzed": "Scientific Results",
     "interpretive": "Relationships And Validation",
     "appendix": "Additional Figures",
 }
@@ -108,26 +217,77 @@ SECTION_ORDER = [
 ]
 TABLE_COLUMN_LABELS = {
     "metric": "Measure",
+    "contrast_family": "Contrast Family",
     "value": "Value",
+    "layer": "Layer",
+    "gate": "Gate",
+    "gate_type": "Gate Type",
+    "unit": "Unit",
+    "threshold": "Threshold",
+    "observed_value": "Observed Value",
     "protocol_block": "Block",
     "protocol_phase": "Phase",
     "condition_code": "Condition",
+    "comparison": "Comparison",
+    "primary_test": "Primary Test",
+    "primary_p_value": "Primary P",
+    "inference_label": "Inference Status",
+    "term_reading": "Interpretation",
+    "predictor": "Predictor",
+    "target": "Target",
+    "threshold_unit": "Unit",
+    "best_lag_minutes": "Best Lag (min)",
+    "response_lag_minutes": "Response Lag (min)",
+    "threshold_value": "Threshold Value",
+    "slope_below": "Slope Below",
+    "slope_above": "Slope Above",
+    "slope_change": "Slope Change",
+    "rss_improvement_fraction": "RSS Improvement",
+    "median_spearman_r": "Median Spearman r",
+    "median_abs_spearman_r": "Median |r|",
+    "same_sign_fraction": "Same-Sign Fraction",
+    "median_pairs_per_session": "Median Pairs/Session",
+    "evidence_grade": "Evidence Grade",
+    "scientific_reading": "Scientific Reading",
+    "claim_family": "Claim Family",
+    "recommended_operating_band": "Recommended Operating Band",
+    "supporting_streams": "Supporting Streams",
+    "statistical_basis": "Statistical Basis",
+    "practical_reading": "Practical Reading",
+    "control_recommendation": "Control Recommendation",
+    "feature_set": "Feature Set",
+    "validation_scheme": "Validation Scheme",
     "n_minutes": "Minutes",
     "n_sessions": "Sessions",
     "n_eligible_sessions": "Comparable sessions",
     "n_participants": "Participants",
     "mean_value": "Average",
+    "median_value": "Median",
+    "min_value": "Min",
+    "max_value": "Max",
     "median": "Median",
     "median_overlap_minutes": "Median overlap (min)",
     "median_spearman_r": "Median correlation",
     "median_mae": "Median average error",
     "coverage_fraction": "Coverage",
+    "coverage_reading": "Coverage Reading",
+    "minute_occupancy_fraction": "Minute Occupancy",
+    "minute_occupancy_reading": "Minute Occupancy Reading",
+    "observed_prompt_count": "Observed Prompts",
+    "expected_prompt_count": "Expected Prompts",
+    "prompt_response_fraction": "Prompt Response",
+    "prompt_support_reading": "Prompt Support Reading",
+    "prompt_support": "Prompt Support",
     "share_within_metric": "Share within measure",
     "mean_consistency": "Consistency",
     "dominant_phase": "Most pronounced phase",
     "direction": "Direction",
     "domain": "Domain",
     "feature": "Feature",
+    "registry_role": "Registry Role",
+    "unit": "Unit",
+    "observation_policy": "Observation Policy",
+    "summary_grain": "Summary Grain",
     "iqr": "IQR",
     "skewness": "Skewness",
     "summary_status": "Summary",
@@ -137,7 +297,7 @@ TABLE_COLUMN_LABELS = {
     "supported_phases": "Supported Phases",
     "supported_conditions": "Supported Conditions",
     "supported_condition_phase_cells": "Supported Condition-Phase Cells",
-    "cell_coverage_fraction": "Cell Coverage",
+    "cell_coverage_fraction": "Supported Cell Fraction",
     "median_sessions_per_condition_phase": "Median Sessions Per Cell",
     "total_valid_phase_summaries": "Total Valid Phase Summaries",
     "scientific_reading": "Scientific Reading",
@@ -152,9 +312,13 @@ TABLE_COLUMN_LABELS = {
     "phase_support_status": "Support Stability",
     "condition_support_status": "Condition Stability",
     "signal_stream": "Signal Stream",
+    "stream_label": "Stream",
     "device": "Device",
     "construct": "Construct",
+    "comparison_class": "Comparison Class",
     "n_sessions_with_any_data": "Sessions With Data",
+    "n_sessions_supported": "Supported Sessions",
+    "n_participants_with_data": "Participants With Data",
     "mean_valid_minutes": "Mean Valid Minutes",
     "median_valid_minutes": "Median Valid Minutes",
     "mean_coverage_fraction": "Mean Coverage",
@@ -165,6 +329,40 @@ TABLE_COLUMN_LABELS = {
     "recommended_role": "Recommended Role",
     "flagged_sessions": "Flagged Sessions",
     "max_concern_score": "Max Concern Score",
+    "present_in_cohort_table": "Present In Cohort Table",
+    "signal_audited": "Signal Audited",
+    "cross_device_comparable": "Cross-Device Comparable",
+    "analytic_feature": "Direct Analytic Feature",
+    "stream_usage": "Stream Usage",
+    "scientific_use": "Scientific Use",
+    "primary_endpoint": "Primary Endpoint",
+    "endpoint_policy_role": "Endpoint Policy Role",
+    "scenario": "Scenario",
+    "included_streams": "Included Streams",
+    "excluded_streams": "Excluded Streams",
+    "scientific_use": "Scientific Use",
+    "manuscript_use": "Manuscript Use",
+    "manuscript_claim": "Manuscript Claim",
+    "endpoint": "Endpoint",
+    "modality_gate": "Modality Gate",
+    "claim_status": "Claim Status",
+    "claim_note": "Claim Note",
+    "in_cohort_table": "In Cohort Table",
+    "source_streams": "Source Streams",
+    "pathway_status": "Pathway Status",
+    "status": "Status",
+    "model_spec": "Model Specification",
+    "evidence_basis": "Evidence Basis",
+    "scientific_implication": "Scientific Implication",
+    "n_terms_retained": "Retained Terms",
+    "fit_converged": "Fit Converged",
+    "warning_count": "Warnings",
+    "warning_summary": "Warning Summary",
+    "flagged_session_streams": "Flagged Session-Streams",
+    "affected_sessions": "Affected Sessions",
+    "top_flagged_sessions": "Top Flagged Sessions",
+    "primary_concern_driver": "Primary Concern Driver",
+    "concern_profile": "Concern Profile",
 }
 SESSION_STORY_METRICS = {
     "thermal_comfort": {"label": "comfort", "kind": "subjective", "scale": 1.0},
@@ -194,15 +392,31 @@ SPARSE_OBSERVATION_CHANNELS = {
     "thermal_comfort",
     "thermal_preference",
     "thermal_pleasure",
+    "visual_sensation",
+    "color_sensation",
     "visual_comfort",
+    "sound_comfort_dbA",
     "air_quality_comfort",
     "room_comfort",
+}
+QUESTIONNAIRE_FULL_SCALES = {
+    "thermal_sensation": np.arange(-3.0, 4.0, 1.0, dtype=float),
+    "thermal_comfort": np.arange(-3.0, 4.0, 1.0, dtype=float),
+    "thermal_pleasure": np.arange(-3.0, 4.0, 1.0, dtype=float),
+    "thermal_preference": np.arange(-1.0, 2.0, 1.0, dtype=float),
+    "visual_sensation": np.arange(-3.0, 4.0, 1.0, dtype=float),
+    "color_sensation": np.arange(-1.0, 2.0, 1.0, dtype=float),
+    "visual_comfort": np.arange(-3.0, 4.0, 1.0, dtype=float),
+    "sound_comfort_dbA": np.arange(-3.0, 4.0, 1.0, dtype=float),
+    "air_quality_comfort": np.arange(-2.0, 3.0, 1.0, dtype=float),
+    "room_comfort": np.arange(-2.0, 3.0, 1.0, dtype=float),
 }
 CONTROL_SIGNAL_CHANNELS = {
     "fan_current_A",
     "fan_control_au",
     "fan_control_secondary_au",
 }
+COHORT_SUPPORT_GRADED_METRICS = list(dict.fromkeys(list(SUPPORT_GRADED_ENDPOINTS) + list(COHORT_DERIVED_ENDPOINTS)))
 ACC_ASSUMPTION_CHANNELS = SPARSE_OBSERVATION_CHANNELS | {
     "fan_current_A",
     "fan_control_au",
@@ -211,15 +425,15 @@ ACC_ASSUMPTION_CHANNELS = SPARSE_OBSERVATION_CHANNELS | {
 REPORT_UI = {
     "page_max_width": "1360px",
     "index_page_max_width": "1100px",
-    "page_padding": "24px 28px 48px",
-    "index_page_padding": "24px 28px 48px",
+    "page_padding": "28px 32px 60px",
+    "index_page_padding": "28px 32px 60px",
     "panel_radius": "22px",
     "card_radius": "16px",
     "image_radius": "14px",
     "panel_shadow": "0 18px 44px rgba(23,32,51,0.08)",
     "panel_border": "1px solid rgba(148,163,184,0.24)",
-    "panel_padding": "20px 22px",
-    "panel_padding_index": "20px 22px",
+    "panel_padding": "24px 26px",
+    "panel_padding_index": "24px 26px",
     "eyebrow_size": "0.74rem",
     "title_size": "2.4rem",
     "index_title_size": "2.4rem",
@@ -227,10 +441,10 @@ REPORT_UI = {
     "nav_font_size": "0.92rem",
     "section_title_size": "1.28rem",
     "figure_title_size": "1.16rem",
-    "hero_gap": "18px",
-    "cards_gap": "12px",
-    "stack_gap": "28px",
-    "table_gap": "18px",
+    "hero_gap": "24px",
+    "cards_gap": "16px",
+    "stack_gap": "36px",
+    "table_gap": "24px",
     "report_hero_columns": "1.2fr 0.8fr",
     "index_hero_columns": "1.15fr auto",
     "report_cards_columns": "repeat(3,minmax(0,1fr))",
@@ -238,23 +452,41 @@ REPORT_UI = {
     "mobile_breakpoint": "1000px",
     "index_mobile_breakpoint": "1000px",
 }
+
+DEVICE_STREAM_CATALOG = [
+    {"signal_stream": "empatica_bvp", "metric": "empatica_bvp_mean", "label": "Empatica BVP", "device": "Empatica", "construct": "bvp_source"},
+    {"signal_stream": "empatica_hr", "metric": "empatica_hr_mean_bpm", "label": "Empatica HR", "device": "Empatica", "construct": "heart_rate"},
+    {"signal_stream": "empatica_eda", "metric": "empatica_eda_mean_uS", "label": "Empatica EDA", "device": "Empatica", "construct": "eda"},
+    {"signal_stream": "empatica_temp", "metric": "empatica_temp_mean_C", "label": "Empatica Temperature", "device": "Empatica", "construct": "temperature"},
+    {"signal_stream": "empatica_acc", "metric": "empatica_acc_mean_g", "label": "Empatica Acceleration", "device": "Empatica", "construct": "motion"},
+    {"signal_stream": "empatica_enmo", "metric": "empatica_enmo_mean_g", "label": "Empatica ENMO", "device": "Empatica", "construct": "motion"},
+    {"signal_stream": "empatica_steps", "metric": "empatica_steps", "label": "Empatica Steps", "device": "Empatica", "construct": "activity"},
+    {"signal_stream": "biopac_hr", "metric": "biopac_hr_mean_bpm", "label": "BIOPAC HR", "device": "BIOPAC", "construct": "heart_rate"},
+    {"signal_stream": "biopac_eda", "metric": "biopac_eda_mean_uS", "label": "BIOPAC EDA", "device": "BIOPAC", "construct": "eda"},
+    {"signal_stream": "biopac_temp", "metric": "biopac_temp_chest_mean_C", "label": "BIOPAC Chest Temperature", "device": "BIOPAC", "construct": "temperature"},
+    {"signal_stream": "biopac_temp_thigh", "metric": "biopac_temp_thigh_mean_C", "label": "BIOPAC Thigh Temperature", "device": "BIOPAC", "construct": "temperature_site"},
+    {"signal_stream": "biopac_temp_arm", "metric": "biopac_temp_arm_mean_C", "label": "BIOPAC Arm Temperature", "device": "BIOPAC", "construct": "temperature_site"},
+    {"signal_stream": "biopac_temp_tibia", "metric": "biopac_temp_tibia_mean_C", "label": "BIOPAC Tibia Temperature", "device": "BIOPAC", "construct": "temperature_site"},
+    {"signal_stream": "biopac_bloodflow", "metric": "biopac_bloodflow_mean_bpu", "label": "BIOPAC Blood Flow", "device": "BIOPAC", "construct": "bloodflow"},
+    {"signal_stream": "biopac_backscatter", "metric": "biopac_backscatter_mean_percent", "label": "BIOPAC Backscatter", "device": "BIOPAC", "construct": "optical"},
+]
 FIGURE_SIZE_PRESETS = {
-    "timeline": (13.2, 3.8),
-    "wide_single": (12.8, 4.8),
-    "wide_single_short": (13.6, 4.2),
-    "wide_single_tall": (14.4, 5.4),
-    "three_panel_row": (13.0, 4.5),
-    "three_panel_row_wide": (13.8, 4.8),
-    "three_panel_stack": (8.8, 12.4),
-    "two_panel_row": (13.2, 5.8),
-    "two_panel_row_balanced": (12.8, 5.8),
-    "two_by_two": (12.0, 8.2),
-    "two_by_two_balanced": (11.8, 8.2),
-    "two_by_two_wide": (12.5, 8.0),
-    "readiness_grid": (12.5, 7.5),
-    "matrix": (12.0, 5.8),
-    "matrix_tall": (14.2, 9.8),
-    "participant_single": (4.6, 4.2),
+    "timeline": (14.8, 4.6),
+    "wide_single": (14.2, 5.8),
+    "wide_single_short": (14.8, 5.0),
+    "wide_single_tall": (15.2, 6.4),
+    "three_panel_row": (14.6, 5.4),
+    "three_panel_row_wide": (15.2, 5.8),
+    "three_panel_stack": (10.2, 14.0),
+    "two_panel_row": (14.6, 6.8),
+    "two_panel_row_balanced": (14.2, 6.8),
+    "two_by_two": (13.4, 9.4),
+    "two_by_two_balanced": (13.2, 9.4),
+    "two_by_two_wide": (14.0, 9.2),
+    "readiness_grid": (13.8, 8.6),
+    "matrix": (13.8, 6.8),
+    "matrix_tall": (15.4, 11.2),
+    "participant_single": (5.8, 5.2),
 }
 
 
@@ -270,7 +502,6 @@ class ReportWriter:
         session_id = session_inputs["session_id"]
         root = ensure_dir(self.outdir / self.o.report_dir / self.o.session_dir / session_id)
         figs = ensure_dir(root / self.o.figure_dir)
-        html_dir = ensure_dir(root / self.o.html_dir)
         narrative_specs, appendix_specs = self._build_session_specs(session_inputs)
         narrative_specs, appendix_specs = self._curate_session_specs(session_inputs, narrative_specs, appendix_specs)
         narrative_specs = self._filter_specs(narrative_specs, modalities)
@@ -278,7 +509,7 @@ class ReportWriter:
         for spec in narrative_specs + appendix_specs:
             spec["display_section"] = spec.get("section", "analyzed")
         saved = self._save_specs(figs, narrative_specs + appendix_specs)
-        html_path = html_dir / f"{session_id}_report.html"
+        html_path = root / f"{session_id}_report.html"
         html_path.write_text(self._session_html(session_inputs, narrative_specs, appendix_specs), encoding="utf-8")
         return {
             "session_id": session_id,
@@ -297,7 +528,6 @@ class ReportWriter:
     def write_cohort_report(self, cohort_inputs: dict, modalities: list[str] | None = None) -> dict:
         root = ensure_dir(self.outdir / self.o.report_dir / self.o.cohort_dir)
         figs = ensure_dir(root / self.o.figure_dir)
-        html_dir = ensure_dir(root / self.o.html_dir)
         narrative_specs, appendix_specs = self._build_cohort_specs(cohort_inputs)
         narrative_specs, appendix_specs = self._curate_cohort_specs(cohort_inputs, narrative_specs, appendix_specs)
         narrative_specs = self._filter_specs(narrative_specs, modalities)
@@ -305,24 +535,51 @@ class ReportWriter:
         for spec in narrative_specs + appendix_specs:
             spec["display_section"] = spec.get("section", "analyzed")
         saved = self._save_specs(figs, narrative_specs + appendix_specs)
-        html_path = html_dir / "cohort_report.html"
-        html_path.write_text(self._cohort_html(cohort_inputs, narrative_specs, appendix_specs), encoding="utf-8")
+        full_html_path = root / "cohort_full_report.html"
+        full_html_path.write_text(self._cohort_html(cohort_inputs, narrative_specs, appendix_specs), encoding="utf-8")
+        chapter_specs = self._cohort_chapter_specs(cohort_inputs, narrative_specs, appendix_specs)
+        chapter_menu_items_html = "".join(
+            f"<a href='{html_escape(chapter['filename'])}'>{html_escape(chapter['title'].split(':')[-1].strip())}<span>{html_escape(chapter['subtitle'])}</span></a>"
+            for chapter in chapter_specs
+        )
+        chapter_paths: dict[str, str] = {}
+        for chapter in chapter_specs:
+            chapter_path = root / chapter["filename"]
+            chapter_path.write_text(
+                self._cohort_chapter_html(
+                    cohort_inputs,
+                    chapter["title"],
+                    chapter["subtitle"],
+                    chapter["specs"],
+                    chapter["intro_sections"],
+                    chapter["section_intro_map"],
+                    chapter_menu_items_html,
+                    chapter["chapter_number"],
+                ),
+                encoding="utf-8",
+            )
+            chapter_paths[chapter["slug"]] = str(chapter_path)
+        html_path = root / "cohort_report.html"
+        html_path.write_text(self._cohort_index_html(cohort_inputs, chapter_specs, chapter_paths, full_html_path), encoding="utf-8")
         return {
             "html_path": str(html_path),
             "figure_paths": [str(p) for p in saved],
             "figure_specs": [{"code": s["code"], "title": s["title"], "tags": s["tags"], "evidence_score": s["evidence_score"], "section": s.get("section", "analyzed")} for s in narrative_specs + appendix_specs],
             "narrative_codes": [s["code"] for s in narrative_specs],
             "appendix_codes": [s["code"] for s in appendix_specs],
+            "full_html_path": str(full_html_path),
+            "chapter_paths": chapter_paths,
         }
 
     def write_all_sessions_index(self, manifest: pd.DataFrame, session_reports: list[dict], cohort_report: dict) -> dict:
-        root = ensure_dir(self.outdir / self.o.report_dir / self.o.work_dir)
+        root = ensure_dir(self.outdir / self.o.report_dir)
         index_path = root / "index.html"
-        atlas_path = root / "cltr_atlas.html"
-        atlas_html = self._all_sessions_html(manifest, session_reports, cohort_report)
+        sessions_path = root / "sessions_report.html"
+        atlas_html = self._atlas_html(manifest, session_reports, cohort_report, sessions_path.name)
+        sessions_html = self._all_sessions_html(manifest, session_reports, cohort_report)
         index_path.write_text(atlas_html, encoding="utf-8")
-        atlas_path.write_text(atlas_html, encoding="utf-8")
-        return {"html_path": str(index_path), "atlas_path": str(atlas_path)}
+        sessions_path.write_text(sessions_html, encoding="utf-8")
+        return {"html_path": str(index_path), "sessions_path": str(sessions_path)}
 
     def _style(self) -> None:
         plt.rcParams.update(
@@ -334,12 +591,20 @@ class ReportWriter:
                 "axes.axisbelow": True,
                 "axes.grid": True,
                 "grid.color": "#eef2f7",
-                "grid.linewidth": 0.55,
-                "font.size": 10,
-                "axes.titlesize": 12,
-                "axes.labelsize": 10,
-                "xtick.labelsize": 9,
-                "ytick.labelsize": 9,
+                "grid.linewidth": 0.7,
+                "font.size": 12,
+                "axes.titlesize": 14,
+                "axes.titleweight": "bold",
+                "axes.labelsize": 12,
+                "xtick.labelsize": 11,
+                "ytick.labelsize": 11,
+                "legend.fontsize": 11,
+                "legend.title_fontsize": 11,
+                "axes.linewidth": 0.9,
+                "xtick.major.size": 5.0,
+                "ytick.major.size": 5.0,
+                "xtick.major.width": 0.9,
+                "ytick.major.width": 0.9,
             }
         )
 
@@ -349,13 +614,13 @@ class ReportWriter:
     def _shared_report_css(self) -> str:
         ui = REPORT_UI
         return f"""
-body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033; background:radial-gradient(circle at top left,#fff6e8 0%,#eef4ff 52%,#f8fafc 100%); }}
-.page {{ width:min(100%, {ui['page_max_width']}); margin:0 auto; padding:24px clamp(16px,2.4vw,28px) 48px; box-sizing:border-box; }}
+body {{ margin:0; min-height:100vh; display:flex; flex-direction:column; font-family: Georgia, "Times New Roman", serif; color:#172033; background:radial-gradient(circle at top left,#fff6e8 0%,#eef4ff 52%,#f8fafc 100%); }}
+.page {{ width:min(100%, {ui['page_max_width']}); margin:0 auto; padding:24px clamp(16px,2.4vw,28px) 48px; box-sizing:border-box; flex:1 0 auto; }}
 .primaryBar {{ position:sticky; top:0; z-index:24; backdrop-filter:blur(16px); background:rgba(248,250,252,0.92); border-bottom:1px solid rgba(148,163,184,0.18); }}
 .primaryBarInner {{ width:min(100%, {ui['page_max_width']}); margin:0 auto; padding:12px clamp(16px,2.4vw,28px); display:flex; align-items:center; justify-content:space-between; gap:16px; box-sizing:border-box; }}
 .logoLink {{ display:inline-flex; align-items:center; gap:12px; min-height:58px; text-decoration:none; }}
 .logoLink:hover {{ transform:translateY(-1px); }}
-.logoMark {{ width:58px; height:58px; display:block; flex-shrink:0; }}
+.logoMark {{ width:58px; height:58px; object-fit:contain; display:block; flex-shrink:0; }}
 .logoWordmark {{ display:inline-flex; align-items:center; height:58px; font:700 2.1rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:-0.04em; color:#172033; }}
 .secondaryBar {{ position:sticky; top:71px; z-index:23; backdrop-filter:blur(14px); background:rgba(255,255,255,0.78); border-bottom:1px solid rgba(148,163,184,0.16); }}
 .secondaryBarInner {{ width:min(100%, {ui['page_max_width']}); margin:0 auto; padding:10px clamp(16px,2.4vw,28px); display:flex; align-items:center; justify-content:space-between; gap:14px; box-sizing:border-box; }}
@@ -429,7 +694,7 @@ body.theme-dark .themeToggleIconLight {{ display:inline; }}
 .takeawayItem {{ display:grid; grid-template-columns:auto minmax(0,1fr); gap:12px; align-items:start; padding:12px 14px; border-radius:16px; background:rgba(255,255,255,0.7); border:1px solid rgba(251,191,36,0.18); }}
 .takeawayIndex {{ width:28px; height:28px; border-radius:999px; display:flex; align-items:center; justify-content:center; background:#fff7ed; border:1px solid rgba(251,191,36,0.3); color:#9a3412; font:700 0.78rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }}
 .takeawayText {{ margin:1px 0 0; color:#334155; line-height:1.55; }}
-.reportShell {{ display:grid; grid-template-columns:minmax(0,1fr); gap:24px; align-items:start; margin-top:20px; }}
+.reportShell {{ display:grid; grid-template-columns:minmax(0,1fr); gap:30px; align-items:start; margin-top:28px; }}
 .stack {{ display:grid; gap:{ui['stack_gap']}; min-width:0; }}
 .nav {{ display:grid; gap:14px; }}
 .navTitle {{ margin:0; font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size:0.78rem; letter-spacing:0.14em; text-transform:uppercase; color:#64748b; }}
@@ -437,19 +702,69 @@ body.theme-dark .themeToggleIconLight {{ display:inline; }}
 .nav a {{ width:100%; min-height:44px; text-decoration:none; color:#172033; background:rgba(255,247,237,0.95); border:1px solid #fed7aa; border-radius:14px; display:grid; grid-template-columns:auto minmax(0,1fr); align-items:start; gap:10px; padding:10px 12px; font-size:0.72rem; font-weight:700; font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height:1.2; box-shadow:inset 0 0 0 4px rgba(255,255,255,0.96); box-sizing:border-box; }}
 .nav a:hover {{ background:#ffedd5; border-color:#fdba74; }}
 .nav a span {{ display:block; font-size:0.78rem; font-weight:500; color:#475569; overflow-wrap:anywhere; }}
-.sectionBlock {{ display:grid; gap:18px; padding-top:8px; border-top:2px solid #e2e8f0; }}
+.sectionBlock {{ display:grid; gap:22px; padding-top:14px; border-top:2px solid #e2e8f0; width:100%; max-width:100%; min-width:0; box-sizing:border-box; }}
 .sectionTitle {{ margin:0; font-size:{ui['section_title_size']}; color:#172033; letter-spacing:0.01em; }}
-.figureSection {{ display:grid; gap:10px; margin:8px 0 18px; }}
+.figureSection {{ display:grid; gap:12px; margin:12px 0 26px; width:100%; max-width:100%; min-width:0; box-sizing:border-box; }}
 .figureSectionTitle {{ font-size:1.02rem; letter-spacing:0.02em; color:#52607a; margin:0 0 2px; font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }}
-.tableGrid {{ display:grid; grid-template-columns:1fr; gap:{ui['table_gap']}; margin:20px 0; }}
-.tablePanel {{ max-width:100%; overflow-x:auto; }}
-table {{ width:100%; min-width:100%; border-collapse:collapse; font-size:0.92rem; table-layout:fixed; }}
-th,td {{ border-bottom:1px solid #e2e8f0; padding:8px 10px; text-align:left; vertical-align:top; overflow-wrap:anywhere; }}
-th {{ color:#334155; background:#f8fafc; }}
+.tableGrid {{ display:grid; grid-template-columns:1fr; gap:{ui['table_gap']}; margin:24px 0; }}
+.chapterGrid {{ display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:{ui['table_gap']}; margin:24px 0; }}
+.tablePanel {{ max-width:100%; min-width:0; overflow:hidden; }}
+.chapterLinkCard {{ display:block; text-decoration:none; color:inherit; }}
+.chapterLinkCard:hover {{ transform:translateY(-1px); }}
+.chapterLinkCard .tablePanel {{ height:100%; cursor:pointer; transition:transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease; overflow:visible; }}
+.chapterLinkCard:hover .tablePanel {{ border-color:#93c5fd; box-shadow:0 22px 48px rgba(23,32,51,0.14); }}
+.chapterCardPanel {{ position:relative; display:grid; gap:14px; background:linear-gradient(180deg,rgba(255,255,255,0.98) 0%,rgba(239,246,255,0.96) 100%); }}
+.chapterCardPanel::before {{ content:""; position:absolute; inset:0 0 auto 0; height:6px; border-radius:{ui['panel_radius']} {ui['panel_radius']} 0 0; background:linear-gradient(90deg,#172033 0%,#1d4ed8 58%,#06b6d4 100%); }}
+.chapterCardHeader {{ display:flex; align-items:start; justify-content:space-between; gap:16px; padding-top:10px; }}
+.chapterCardTitleGroup {{ display:grid; gap:6px; }}
+.chapterCardHeading {{ margin:0; font-size:1.25rem; line-height:1.2; letter-spacing:-0.02em; }}
+.chapterCardKicker {{ display:inline-flex; align-items:center; gap:8px; color:#1d4ed8; font:700 0.75rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:0.08em; text-transform:uppercase; }}
+.chapterCardKicker::before {{ content:""; width:10px; height:10px; border-radius:999px; background:#06b6d4; box-shadow:0 0 0 4px rgba(6,182,212,0.14); }}
+.chapterCardBadge {{ display:inline-flex; align-items:center; min-height:36px; padding:0 12px; border-radius:999px; border:1px solid rgba(29,78,216,0.18); background:rgba(255,255,255,0.84); color:#172033; font:700 0.8rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; white-space:nowrap; }}
+.chapterCardDesc {{ margin:0; color:#334155; line-height:1.65; font-size:0.98rem; }}
+.chapterMetaGrid {{ display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; }}
+.chapterMetaItem {{ border:1px solid rgba(148,163,184,0.18); border-radius:16px; background:rgba(255,255,255,0.72); padding:12px 14px; }}
+.chapterMetaLabel {{ color:#64748b; font:700 0.72rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:0.08em; text-transform:uppercase; }}
+.chapterMetaValue {{ margin-top:6px; color:#172033; line-height:1.45; font-size:0.92rem; }}
+.chapterOpenRow {{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding-top:4px; }}
+.chapterOpenHint {{ color:#475569; font:600 0.82rem/1.4 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }}
+.chapterOpenCta {{ display:inline-flex; align-items:center; gap:10px; color:#172033; font:700 0.9rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }}
+.chapterOpenCta::before {{ content:""; width:12px; height:12px; border-radius:999px; border:3px solid #1d4ed8; box-shadow:inset 0 0 0 3px #ffffff; background:#06b6d4; }}
+.radioCta {{ display:inline-flex; align-items:center; gap:12px; margin-top:14px; padding:12px 18px; border-radius:999px; border:1px solid rgba(191,219,254,0.54); background:linear-gradient(180deg,rgba(255,255,255,0.24) 0%,rgba(255,255,255,0.12) 100%); color:#f8fafc; text-decoration:none; font:700 0.92rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; box-shadow:0 16px 34px rgba(8,47,73,0.18); }}
+.radioCta::before {{ content:""; width:16px; height:16px; border-radius:999px; border:4px solid rgba(255,255,255,0.9); box-shadow:0 0 0 3px rgba(191,219,254,0.34); background:#f59e0b; }}
+.radioCta:hover {{ border-color:rgba(255,255,255,0.72); background:linear-gradient(180deg,rgba(255,255,255,0.32) 0%,rgba(255,255,255,0.16) 100%); }}
+body.theme-dark .chapterCardPanel {{ background:linear-gradient(180deg,rgba(15,23,42,0.96) 0%,rgba(15,23,42,0.9) 100%); }}
+body.theme-dark .chapterCardBadge,body.theme-dark .chapterMetaItem {{ background:rgba(15,23,42,0.84); border-color:rgba(71,85,105,0.38); }}
+body.theme-dark .chapterCardDesc,body.theme-dark .chapterMetaValue,body.theme-dark .chapterOpenHint {{ color:#cbd5e1; }}
+body.theme-dark .chapterCardKicker {{ color:#93c5fd; }}
+body.theme-dark .radioCta {{ border-color:rgba(147,197,253,0.44); }}
+.heroActions {{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:20px; }}
+.figurePanel .dataTablePanel {{ width:100%; max-width:100%; margin:8px 0 0; padding:0; border:none; background:transparent; box-shadow:none; box-sizing:border-box; }}
+.figurePanel .dataTablePanel h3 {{ margin:0 0 8px; font-size:0.9rem; line-height:1.3; color:#334155; }}
+.dataTablePanel .tableScroll {{ display:block; width:100%; max-width:100%; overflow-x:scroll; overflow-y:hidden; scrollbar-gutter:stable; scrollbar-width:auto; }}
+.figurePanel .dataTablePanel .tableScroll {{ margin:0; padding:10px 12px; border:1px solid #d7dee9; border-radius:12px; background:#ffffff; box-shadow:inset 0 1px 0 rgba(255,255,255,0.8); max-width:100%; box-sizing:border-box; }}
+.dataTablePanel .tableScroll::-webkit-scrollbar {{ height:12px; }}
+.dataTablePanel .tableScroll::-webkit-scrollbar-track {{ background:#e2e8f0; border-radius:999px; }}
+.dataTablePanel .tableScroll::-webkit-scrollbar-thumb {{ background:#94a3b8; border-radius:999px; border:2px solid #e2e8f0; }}
+.dataTablePanel .tableScroll::-webkit-scrollbar-thumb:hover {{ background:#64748b; }}
+.dataTablePanel table {{ width:max-content; min-width:100%; max-width:none; border-collapse:collapse; font-size:0.82rem; line-height:1.35; table-layout:auto; }}
+.dataTablePanel th,.dataTablePanel td {{ border-bottom:1px solid #e2e8f0; padding:6px 8px; text-align:left; vertical-align:top; white-space:normal; overflow-wrap:break-word; word-break:normal; max-width:16rem; }}
+.dataTablePanel th {{ color:#334155; background:#f8fafc; }}
+.dataTablePanel th.col-prompt_support,.dataTablePanel td.col-prompt_support {{ width:10rem; min-width:10rem; }}
+.dataTablePanel th.col-minute_occupancy_fraction,.dataTablePanel td.col-minute_occupancy_fraction {{ width:7rem; min-width:7rem; }}
+.dataTablePanel th.col-minute_occupancy_reading,.dataTablePanel td.col-minute_occupancy_reading,.dataTablePanel th.col-coverage_reading,.dataTablePanel td.col-coverage_reading {{ width:16rem; min-width:16rem; }}
+body.theme-dark .figurePanel .dataTablePanel {{ background:transparent; border-color:transparent; }}
+body.theme-dark .figurePanel .dataTablePanel h3 {{ color:#e2e8f0; }}
+body.theme-dark .figurePanel .dataTablePanel .tableScroll {{ background:rgba(15,23,42,0.72); border-color:rgba(71,85,105,0.42); }}
+body.theme-dark .dataTablePanel .tableScroll {{ scrollbar-color:#64748b rgba(30,41,59,0.9); }}
+body.theme-dark .dataTablePanel .tableScroll::-webkit-scrollbar-track {{ background:rgba(30,41,59,0.9); }}
+body.theme-dark .dataTablePanel .tableScroll::-webkit-scrollbar-thumb {{ background:#64748b; border-color:rgba(30,41,59,0.9); }}
+body.theme-dark .dataTablePanel .tableScroll::-webkit-scrollbar-thumb:hover {{ background:#94a3b8; }}
+.figurePanel {{ width:100%; max-width:100%; min-width:0; box-sizing:border-box; overflow:hidden; }}
 .figurePanel.hidden {{ display:none; }}
 .figurePanel h2 {{ margin:0 0 12px; font-size:{ui['figure_title_size']}; line-height:1.25; white-space:normal; overflow:visible; text-overflow:clip; }}
 .figureImage {{ width:100%; height:auto; border-radius:{ui['image_radius']}; border:1px solid #dbeafe; background:white; cursor:zoom-in; }}
-.responsiveFigure {{ width:100%; max-width:100%; overflow:hidden; }}
+.responsiveFigure {{ width:100%; max-width:100%; min-width:0; overflow:hidden; }}
 .responsiveFigure > * {{ max-width:100% !important; }}
 .responsiveFigure .js-plotly-plot,.responsiveFigure .plot-container,.responsiveFigure .svg-container {{ width:100% !important; max-width:100% !important; }}
 .meta {{ color:#64748b; font-size:0.86rem; margin-bottom:10px; font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }}
@@ -458,22 +773,22 @@ th {{ color:#334155; background:#f8fafc; }}
 .lightbox {{ position:fixed; inset:0; background:rgba(15,23,42,0.86); display:none; align-items:center; justify-content:center; padding:30px; z-index:30; }}
 .lightbox.open {{ display:flex; }}
 .lightbox img {{ max-width:95vw; max-height:90vh; background:white; border-radius:{ui['card_radius']}; }}
-.copyrightNote {{ width:min(100%, {ui['page_max_width']}); margin:0 auto; padding:0 clamp(16px,2.4vw,28px) 18px; box-sizing:border-box; text-align:center; color:#64748b; font:500 0.84rem/1.5 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }}
+.copyrightNote {{ width:min(100%, {ui['page_max_width']}); margin:0 auto; padding:0 clamp(16px,2.4vw,28px) 18px; box-sizing:border-box; display:flex; justify-content:center; align-items:center; text-align:center; color:#64748b; font:500 0.84rem/1.5 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }}
 body.theme-dark .copyrightNote {{ color:#94a3b8; }}
 @media (max-width:1280px) {{ .reportShell {{ grid-template-columns:1fr; }} }}
-@media (max-width:{ui['mobile_breakpoint']}) {{ .primaryBarInner,.secondaryBarInner,.hero,.tableGrid {{ grid-template-columns:1fr; }} .primaryBarInner,.secondaryBarInner {{ display:grid; padding:12px 20px; }} .mastheadActions,.secondaryBarActions {{ justify-content:space-between; }} .secondaryBarText {{ white-space:normal; }} .page {{ padding:20px 16px 40px; }} .nav a {{ grid-template-columns:auto minmax(0,1fr); }} .menuPanel {{ right:auto; left:0; width:min(100%, 420px); }} .takeawayHeader {{ align-items:start; }} .socialLinks {{ order:2; }} }}
+@media (max-width:{ui['mobile_breakpoint']}) {{ .primaryBarInner,.secondaryBarInner,.hero,.tableGrid,.chapterGrid,.chapterMetaGrid {{ grid-template-columns:1fr; }} .primaryBarInner,.secondaryBarInner {{ display:grid; padding:12px 20px; }} .mastheadActions,.secondaryBarActions {{ justify-content:space-between; }} .secondaryBarText {{ white-space:normal; }} .page {{ padding:20px 16px 40px; }} .nav a {{ grid-template-columns:auto minmax(0,1fr); }} .menuPanel {{ right:auto; left:0; width:min(100%, 420px); }} .takeawayHeader {{ align-items:start; }} .socialLinks {{ order:2; }} .chapterCardHeader,.chapterOpenRow {{ grid-template-columns:1fr; display:grid; }} .figurePanel .dataTablePanel {{ width:100%; margin:6px 0 0; }} .figurePanel .dataTablePanel .tableScroll {{ padding:8px 10px; }} }}
 """.strip()
 
     def _shared_index_css(self) -> str:
         ui = REPORT_UI
         return f"""
-body {{ margin:0; font-family: Georgia, "Times New Roman", serif; color:#172033; background:radial-gradient(circle at top left,#fff6e8 0%,#eef4ff 52%,#f8fafc 100%); }}
-.page {{ width:min(100%, {ui['page_max_width']}); margin:0 auto; padding:{ui['index_page_padding']}; box-sizing:border-box; }}
+body {{ margin:0; min-height:100vh; display:flex; flex-direction:column; font-family: Georgia, "Times New Roman", serif; color:#172033; background:radial-gradient(circle at top left,#fff6e8 0%,#eef4ff 52%,#f8fafc 100%); }}
+.page {{ width:min(100%, {ui['page_max_width']}); margin:0 auto; padding:{ui['index_page_padding']}; box-sizing:border-box; flex:1 0 auto; }}
 .primaryBar {{ position:sticky; top:0; z-index:24; backdrop-filter:blur(16px); background:rgba(248,250,252,0.92); border-bottom:1px solid rgba(148,163,184,0.18); }}
 .primaryBarInner {{ width:min(100%, {ui['page_max_width']}); margin:0 auto; padding:12px 28px; display:flex; align-items:center; justify-content:space-between; gap:16px; box-sizing:border-box; }}
 .logoLink {{ display:inline-flex; align-items:center; gap:12px; min-height:58px; text-decoration:none; }}
 .logoLink:hover {{ transform:translateY(-1px); }}
-.logoMark {{ width:58px; height:58px; display:block; flex-shrink:0; }}
+.logoMark {{ width:58px; height:58px; object-fit:contain; display:block; flex-shrink:0; }}
 .logoWordmark {{ display:inline-flex; align-items:center; height:58px; font:700 2.1rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:-0.04em; color:#172033; }}
 .secondaryBar {{ position:sticky; top:71px; z-index:23; backdrop-filter:blur(14px); background:rgba(255,255,255,0.78); border-bottom:1px solid rgba(148,163,184,0.16); }}
 .secondaryBarInner {{ width:min(100%, {ui['page_max_width']}); margin:0 auto; padding:10px 28px; display:flex; align-items:center; justify-content:space-between; gap:14px; box-sizing:border-box; }}
@@ -498,6 +813,7 @@ body.theme-dark .logoWordmark,body.theme-dark .secondaryBarType,body.theme-dark 
 body.theme-dark .secondaryBarText,body.theme-dark .subtitle,body.theme-dark .tagLine,body.theme-dark .heroStatement,body.theme-dark .heroFactValue {{ color:#cbd5e1; }}
 body.theme-dark .panel,body.theme-dark .sessionCard,body.theme-dark .heroFact {{ background:rgba(15,23,42,0.88); border-color:rgba(71,85,105,0.38); box-shadow:0 18px 44px rgba(2,6,23,0.38); }}
 body.theme-dark .heroIntro,body.theme-dark .heroCta {{ background:linear-gradient(135deg,#0f172a 0%,#1e293b 52%,#334155 100%); border-color:rgba(71,85,105,0.4); }}
+body.theme-dark .gatewayCard {{ background:linear-gradient(135deg,#0f172a 0%,#1e293b 52%,#334155 100%); border-color:rgba(71,85,105,0.4); }}
 body.theme-dark .socialLink,body.theme-dark .themeToggle,body.theme-dark .menuButton {{ color:#f8fafc; background:linear-gradient(180deg,rgba(30,41,59,0.96) 0%,rgba(15,23,42,0.96) 100%); border-color:rgba(71,85,105,0.5); }}
 body.theme-dark .menuPanel {{ background:rgba(15,23,42,0.96); border-color:rgba(71,85,105,0.4); }}
 body.theme-dark .nav a {{ color:#f8fafc; background:rgba(30,41,59,0.96); border-color:rgba(71,85,105,0.44); box-shadow:inset 0 0 0 4px rgba(15,23,42,0.75); }}
@@ -516,10 +832,10 @@ body.theme-dark .themeToggleIconLight {{ display:inline; }}
 .nav a {{ width:100%; min-height:44px; text-decoration:none; color:#172033; background:rgba(255,247,237,0.95); border:1px solid #fed7aa; border-radius:14px; display:grid; grid-template-columns:auto minmax(0,1fr); align-items:start; gap:10px; padding:10px 12px; font-size:0.72rem; font-weight:700; font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height:1.2; box-shadow:inset 0 0 0 4px rgba(255,255,255,0.96); box-sizing:border-box; }}
 .nav a:hover {{ background:#ffedd5; border-color:#fdba74; }}
 .nav a span {{ display:block; font-size:0.78rem; font-weight:500; color:#475569; overflow-wrap:anywhere; }}
-.hero,.grid {{ display:grid; gap:16px; }}
+.hero,.grid {{ display:grid; gap:22px; }}
 .hero {{ grid-template-columns:{ui['index_hero_columns']}; align-items:end; }}
 .panel,.sessionCard {{ background:rgba(255,255,255,0.9); border:{ui['panel_border']}; border-radius:{ui['panel_radius']}; box-shadow:{ui['panel_shadow']}; padding:{ui['panel_padding_index']}; backdrop-filter:blur(8px); }}
-.grid {{ grid-template-columns:{ui['index_grid_columns']}; margin-top:22px; }}
+.grid {{ grid-template-columns:{ui['index_grid_columns']}; margin-top:28px; }}
 .eyebrow {{ font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size:{ui['eyebrow_size']}; letter-spacing:0.18em; text-transform:uppercase; color:#9a3412; margin-bottom:8px; }}
 .title {{ font-size:{ui['index_title_size']}; font-weight:700; letter-spacing:-0.04em; margin:0 0 8px; }}
 .subtitle,.tagLine {{ color:#52607a; line-height:1.6; }}
@@ -529,17 +845,47 @@ body.theme-dark .themeToggleIconLight {{ display:inline; }}
 .heroCta .eyebrow {{ color:#dbeafe; }}
 .heroCta .subtitle {{ color:rgba(239,246,255,0.92); }}
 .heroIntro .subtitle {{ color:#7c2d12; }}
+.gatewayGrid {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:22px; width:100%; margin-top:22px; }}
+.gatewayCard {{ min-height:100%; background:linear-gradient(135deg,#172033 0%,#1d4ed8 55%,#06b6d4 100%); color:#f8fafc; border:1px solid rgba(191,219,254,0.45); text-decoration:none; display:grid; gap:18px; align-content:start; }}
+.gatewayCard:hover {{ transform:translateY(-2px); box-shadow:0 22px 44px rgba(23,32,51,0.16); }}
+.gatewayCard .eyebrow {{ color:#dbeafe; }}
+.gatewayCard .subtitle,.gatewayCard p {{ color:rgba(239,246,255,0.92); }}
+.gatewayMeta {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }}
+.gatewayFact {{ background:rgba(255,255,255,0.12); border:1px solid rgba(219,234,254,0.24); border-radius:14px; padding:10px 12px; }}
+.gatewayFactLabel {{ font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size:0.72rem; text-transform:uppercase; letter-spacing:0.08em; color:#dbeafe; }}
+.gatewayFactValue {{ margin-top:4px; color:#f8fafc; line-height:1.45; }}
+.gatewayCta {{ display:inline-flex; align-items:center; gap:10px; color:#f8fafc; font:700 0.92rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }}
+.gatewayCta::before {{ content:""; width:12px; height:12px; border-radius:999px; border:3px solid rgba(255,255,255,0.92); box-shadow:inset 0 0 0 3px rgba(6,182,212,0.9); background:#f59e0b; }}
 .heroSticky {{ position:sticky; top:18px; align-self:start; }}
-.heroMeta {{ display:grid; gap:10px; margin-top:16px; }}
+.heroMeta {{ display:grid; gap:14px; margin-top:20px; }}
 .heroStatement {{ font-size:1rem; line-height:1.65; color:#4a1d0d; max-width:58ch; }}
-.heroFacts {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }}
+.heroFacts {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }}
 .heroFact {{ background:rgba(255,255,255,0.42); border:1px solid rgba(255,255,255,0.45); border-radius:14px; padding:10px 12px; }}
 .heroFactLabel {{ font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size:0.72rem; text-transform:uppercase; letter-spacing:0.08em; color:#9a3412; }}
 .heroFactValue {{ margin-top:4px; color:#4a1d0d; line-height:1.45; }}
-.sessionCard h3 {{ margin:0 0 10px; font-size:1.3rem; }}
+.sessionCard {{ position:relative; overflow:hidden; display:grid; gap:12px; align-content:start; }}
+.sessionCard::before {{ content:""; position:absolute; inset:0 0 auto 0; height:6px; border-radius:{ui['panel_radius']} {ui['panel_radius']} 0 0; background:linear-gradient(90deg,#172033 0%,#1d4ed8 58%,#06b6d4 100%); }}
+.sessionCard > * {{ position:relative; z-index:1; }}
+.sessionCard h3 {{ margin:0 0 6px; font-size:1.3rem; }}
+.sessionCard p {{ margin:0; }}
+.sessionCard .pillLink {{ justify-self:start; margin-top:6px; }}
+.sessionTone--bri-mid {{ background:linear-gradient(180deg,rgba(255,251,235,0.96) 0%,rgba(254,240,138,0.54) 100%); border-color:rgba(245,158,11,0.34); }}
+.sessionTone--bri-mid::before {{ background:linear-gradient(90deg,#b45309 0%,#f59e0b 55%,#f97316 100%); }}
+.sessionTone--bri-mor {{ background:linear-gradient(180deg,rgba(255,247,237,0.98) 0%,rgba(253,186,116,0.5) 100%); border-color:rgba(249,115,22,0.34); }}
+.sessionTone--bri-mor::before {{ background:linear-gradient(90deg,#9a3412 0%,#ea580c 55%,#fb7185 100%); }}
+.sessionTone--dim-mid {{ background:linear-gradient(180deg,rgba(240,253,250,0.98) 0%,rgba(153,246,228,0.5) 100%); border-color:rgba(13,148,136,0.34); }}
+.sessionTone--dim-mid::before {{ background:linear-gradient(90deg,#0f766e 0%,#14b8a6 55%,#22c55e 100%); }}
+.sessionTone--dim-mor {{ background:linear-gradient(180deg,rgba(245,243,255,0.98) 0%,rgba(196,181,253,0.52) 100%); border-color:rgba(124,58,237,0.32); }}
+.sessionTone--dim-mor::before {{ background:linear-gradient(90deg,#5b21b6 0%,#7c3aed 52%,#2563eb 100%); }}
+body.theme-dark .sessionTone--bri-mid {{ background:linear-gradient(180deg,rgba(69,26,3,0.96) 0%,rgba(120,53,15,0.92) 100%); border-color:rgba(251,191,36,0.26); }}
+body.theme-dark .sessionTone--bri-mor {{ background:linear-gradient(180deg,rgba(67,20,7,0.96) 0%,rgba(124,45,18,0.92) 100%); border-color:rgba(251,146,60,0.28); }}
+body.theme-dark .sessionTone--dim-mid {{ background:linear-gradient(180deg,rgba(4,47,46,0.96) 0%,rgba(17,94,89,0.92) 100%); border-color:rgba(45,212,191,0.28); }}
+body.theme-dark .sessionTone--dim-mor {{ background:linear-gradient(180deg,rgba(46,16,101,0.96) 0%,rgba(49,46,129,0.92) 100%); border-color:rgba(167,139,250,0.28); }}
 .pillLink {{ display:inline-block; margin-top:12px; padding:10px 14px; background:#172033; color:#f8fafc; text-decoration:none; border-radius:999px; font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }}
 .heroCta .pillLink {{ background:#f8fafc; color:#172033; }}
-@media (max-width:{ui['index_mobile_breakpoint']}) {{ .primaryBarInner,.secondaryBarInner,.hero,.grid,.heroFacts {{ grid-template-columns:1fr; }} .primaryBarInner,.secondaryBarInner {{ display:grid; padding:12px 20px; }} .mastheadActions,.secondaryBarActions {{ justify-content:space-between; }} .secondaryBarText {{ white-space:normal; }} .menuPanel {{ right:auto; left:0; width:min(100%, 420px); }} .heroSticky {{ position:static; }} .socialLinks {{ order:2; }} }}
+.copyrightNote {{ width:min(100%, {ui['page_max_width']}); margin:0 auto; padding:0 clamp(16px,2.4vw,28px) 18px; box-sizing:border-box; display:flex; justify-content:center; align-items:center; text-align:center; color:#64748b; font:500 0.84rem/1.5 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }}
+body.theme-dark .copyrightNote {{ color:#94a3b8; }}
+@media (max-width:{ui['index_mobile_breakpoint']}) {{ .primaryBarInner,.secondaryBarInner,.hero,.grid,.heroFacts,.gatewayGrid,.gatewayMeta {{ grid-template-columns:1fr; }} .primaryBarInner,.secondaryBarInner {{ display:grid; padding:12px 20px; }} .mastheadActions,.secondaryBarActions {{ justify-content:space-between; }} .secondaryBarText {{ white-space:normal; }} .menuPanel {{ right:auto; left:0; width:min(100%, 420px); }} .heroSticky {{ position:static; }} .socialLinks {{ order:2; }} }}
 """.strip()
 
     def _social_links_html(self) -> str:
@@ -564,30 +910,14 @@ body.theme-dark .themeToggleIconLight {{ display:inline; }}
             )
         return f"<div class='socialLinks'>{''.join(items)}</div>"
 
-    def _logo_image_svg(self) -> str:
-        return (
-            "<svg class='logoMark' viewBox='0 0 72 72' aria-hidden='true'>"
-            "<defs>"
-            "<linearGradient id='cltrLogoBg' x1='0%' y1='0%' x2='100%' y2='100%'><stop offset='0%' stop-color='#0f172a'/><stop offset='50%' stop-color='#1d4ed8'/><stop offset='100%' stop-color='#06b6d4'/></linearGradient>"
-            "<linearGradient id='cltrLogoLineA' x1='0%' y1='0%' x2='100%' y2='0%'><stop offset='0%' stop-color='#ffffff'/><stop offset='100%' stop-color='#fde68a'/></linearGradient>"
-            "<linearGradient id='cltrLogoLineB' x1='0%' y1='0%' x2='100%' y2='0%'><stop offset='0%' stop-color='#bfdbfe'/><stop offset='100%' stop-color='#fca5a5'/></linearGradient>"
-            "</defs>"
-            "<rect x='3' y='3' width='66' height='66' rx='22' fill='url(#cltrLogoBg)'/>"
-            "<g opacity='0.24' stroke='#ffffff' stroke-width='1.5'>"
-            "<path d='M16 21h40'/><path d='M16 31h40'/><path d='M16 41h40'/><path d='M16 51h40'/>"
-            "<path d='M24 15v42'/><path d='M36 15v42'/><path d='M48 15v42'/>"
-            "</g>"
-            "<path d='M16 46c5-4 8-17 14-17s9 16 15 16 10-10 13-14' fill='none' stroke='url(#cltrLogoLineA)' stroke-width='5.5' stroke-linecap='round'/>"
-            "<path d='M16 33c5 0 8-9 14-9s9 12 15 12 10-6 13-8' fill='none' stroke='url(#cltrLogoLineB)' stroke-width='3.8' stroke-linecap='round'/>"
-            "<g fill='#ffffff'><circle cx='30' cy='29' r='3.4'/><circle cx='45' cy='45' r='3.4'/></g>"
-            "<circle cx='54' cy='20' r='4.5' fill='#fde68a' fill-opacity='0.94'/>"
-            "</svg>"
-        )
+    def _logo_image_html(self, logo_src: str) -> str:
+        return f"<img class='logoMark' src='{html_escape(logo_src)}' alt='CLTR logo'/>"
 
     def _shared_chrome(
         self,
         *,
         home_href: str,
+        logo_src: str,
         page_type: str,
         page_meta: str,
         menu_button_id: str,
@@ -598,23 +928,30 @@ body.theme-dark .themeToggleIconLight {{ display:inline; }}
         menu_icon_bars: bool = False,
         show_secondary_bar: bool = True,
         show_menu_button: bool = True,
+        secondary_actions_html_before: str = "",
+        secondary_actions_html_after: str = "",
     ) -> str:
-        menu_prefix = "<span class='menuButtonBars'><span></span><span></span><span></span></span>" if menu_icon_bars else ""
         menu_html = (
-            f"<button id='{html_escape(menu_button_id)}' class='menuButton' type='button' aria-expanded='false' aria-controls='{html_escape(menu_panel_id)}' aria-label='{html_escape(menu_title)}'>{menu_prefix}<span>{html_escape(menu_label)}</span></button>"
-            f"<div id='{html_escape(menu_panel_id)}' class='menuPanel'><h2 class='menuTitle'>{html_escape(menu_title)}</h2><nav class='nav'><div class='navList'>{menu_items_html}</div></nav></div>"
+            self._menu_button_html(
+                button_id=menu_button_id,
+                panel_id=menu_panel_id,
+                label=menu_label,
+                title=menu_title,
+                items_html=menu_items_html,
+                icon_bars=menu_icon_bars,
+            )
             if show_menu_button
             else ""
         )
         secondary_html = (
-            f"<div class='secondaryBar'><div class='secondaryBarInner'><div class='secondaryBarMeta'><span class='secondaryBarType'>{html_escape(page_type)}</span><span class='secondaryBarText'>{html_escape(page_meta)}</span></div><div class='secondaryBarActions'>{menu_html}</div></div></div>"
+            f"<div class='secondaryBar'><div class='secondaryBarInner'><div class='secondaryBarMeta'><span class='secondaryBarType'>{html_escape(page_type)}</span><span class='secondaryBarText'>{html_escape(page_meta)}</span></div><div class='secondaryBarActions'>{secondary_actions_html_before}{menu_html}{secondary_actions_html_after}</div></div></div>"
             if show_secondary_bar
             else ""
         )
         return (
             f"<header class='primaryBar'>"
             f"<div class='primaryBarInner'>"
-            f"<a class='logoLink' href='{html_escape(home_href)}' title='Open report index' aria-label='Open report index'>{self._logo_image_svg()}<span class='logoWordmark'>CLTR</span></a>"
+            f"<a class='logoLink' href='{html_escape(home_href)}' title='Open report index' aria-label='Open report index'>{self._logo_image_html(logo_src)}<span class='logoWordmark'>CLTR</span></a>"
             f"<div class='mastheadActions'>"
             f"{self._social_links_html()}"
             f"<button class='themeToggle' id='themeToggle' type='button' aria-label='Toggle dark mode'><span class='themeToggleIconDark' aria-hidden='true'>◐</span><span class='themeToggleIconLight' aria-hidden='true'>◑</span></button>"
@@ -624,6 +961,48 @@ body.theme-dark .themeToggleIconLight {{ display:inline; }}
             f"{secondary_html}"
         )
 
+    def _menu_button_html(
+        self,
+        *,
+        button_id: str,
+        panel_id: str,
+        label: str,
+        title: str,
+        items_html: str,
+        icon_bars: bool = False,
+    ) -> str:
+        menu_prefix = "<span class='menuButtonBars'><span></span><span></span><span></span></span>" if icon_bars else ""
+        return (
+            f"<button id='{html_escape(button_id)}' class='menuButton' type='button' aria-expanded='false' "
+            f"aria-controls='{html_escape(panel_id)}' aria-label='{html_escape(title)}'>{menu_prefix}<span>{html_escape(label)}</span></button>"
+            f"<div id='{html_escape(panel_id)}' class='menuPanel'><h2 class='menuTitle'>{html_escape(title)}</h2>"
+            f"<nav class='nav'><div class='navList'>{items_html}</div></nav></div>"
+        )
+
+    def _menu_script(self, *, button_id: str, panel_id: str, var_prefix: str) -> str:
+        return (
+            f"const {var_prefix}Button=document.getElementById('{html_escape(button_id)}'); const {var_prefix}Panel=document.getElementById('{html_escape(panel_id)}');\n"
+            f"const close{var_prefix.capitalize()}Menu=()=>{{ if(!{var_prefix}Panel||!{var_prefix}Button) return; {var_prefix}Panel.classList.remove('open'); {var_prefix}Button.setAttribute('aria-expanded','false'); }};\n"
+            f"const toggle{var_prefix.capitalize()}Menu=()=>{{ if(!{var_prefix}Panel||!{var_prefix}Button) return; const open={var_prefix}Panel.classList.toggle('open'); {var_prefix}Button.setAttribute('aria-expanded', open ? 'true' : 'false'); }};\n"
+            f"if({var_prefix}Button&&{var_prefix}Panel){{ {var_prefix}Button.addEventListener('click',(event)=>{{ event.stopPropagation(); toggle{var_prefix.capitalize()}Menu(); }}); {var_prefix}Panel.querySelectorAll('a').forEach(link=>link.addEventListener('click', close{var_prefix.capitalize()}Menu)); document.addEventListener('click',(event)=>{{ if(!{var_prefix}Panel.contains(event.target) && !{var_prefix}Button.contains(event.target)) close{var_prefix.capitalize()}Menu(); }}); document.addEventListener('keydown',(event)=>{{ if(event.key==='Escape') close{var_prefix.capitalize()}Menu(); }}); }}\n"
+        )
+
+    def _cohort_chapter_menu_items_html(self, prefix: str) -> str:
+        chapters = [
+            ("cohort_report.html", "Cohort Report", "Chapter index for the cohort audit and result suite"),
+            ("cohort_ch01_overview_audit.html", "Chapter 1", "Study overview and audit registers"),
+            ("cohort_ch02_subjective_behavioral.html", "Chapter 2", "Subjective and behavioral data"),
+            ("cohort_ch03_physiological.html", "Chapter 3", "Physiological data"),
+            ("cohort_ch04_environmental.html", "Chapter 4", "Environmental data"),
+            ("cohort_ch05_derived_results.html", "Chapter 5", "Derived results and audit registers"),
+            ("cohort_ch06_relationships_validation.html", "Chapter 6", "Relationships and validation"),
+            ("cohort_full_report.html", "Full Cohort Report", "Full combined cohort export"),
+        ]
+        return "".join(
+            f"<a href='{html_escape(prefix + filename)}'>{html_escape(label)}<span>{html_escape(desc)}</span></a>"
+            for filename, label, desc in chapters
+        )
+
     def _theme_toggle_script(self) -> str:
         return """const themeToggle=document.getElementById('themeToggle');
 const storedTheme=window.localStorage.getItem('cltr-theme');
@@ -631,6 +1010,18 @@ if(storedTheme==='dark'){document.body.classList.add('theme-dark');}
 const syncThemeIcon=()=>{if(themeToggle){themeToggle.setAttribute('aria-pressed', document.body.classList.contains('theme-dark') ? 'true' : 'false');}};
 syncThemeIcon();
 if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classList.toggle('theme-dark');window.localStorage.setItem('cltr-theme', document.body.classList.contains('theme-dark') ? 'dark' : 'light');syncThemeIcon();});}"""
+
+    def _session_card_tone_class(self, condition_code: str) -> str:
+        code = str(condition_code or "").strip().upper()
+        if code.startswith("BRI") and "MID" in code:
+            return "sessionTone--bri-mid"
+        if code.startswith("BRI") and "MOR" in code:
+            return "sessionTone--bri-mor"
+        if code.startswith("DIM") and "MID" in code:
+            return "sessionTone--dim-mid"
+        if code.startswith("DIM") and "MOR" in code:
+            return "sessionTone--dim-mor"
+        return "sessionTone--bri-mid"
 
     def _home_page_css(self) -> str:
         ui = REPORT_UI
@@ -647,7 +1038,8 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
 .heroVisual {{ width:min(100%, 860px); border-radius:28px; border:1px solid rgba(219,234,254,0.34); background:rgba(255,255,255,0.14); box-shadow:inset 0 1px 0 rgba(255,255,255,0.2); padding:24px; margin-top:20px; display:grid; justify-items:center; gap:14px; }}
 .heroVisual .logoMark {{ width:min(220px, 42vw); height:auto; }}
 .heroVisualText {{ margin:0; max-width:46ch; font:500 1rem/1.6 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color:#e2e8f0; }}
-.copyrightNote {{ padding-bottom:18px; }}
+.copyrightNote {{ width:min(100%, {ui['page_max_width']}); margin:0 auto; padding:0 clamp(16px,2.4vw,28px) 18px; box-sizing:border-box; display:flex; justify-content:center; align-items:center; text-align:center; color:#64748b; font:500 0.84rem/1.5 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }}
+body.theme-dark .copyrightNote {{ color:#94a3b8; }}
 @media (max-width:{ui['mobile_breakpoint']}) {{ .hero {{ gap:16px; }} .heroVisual {{ padding:16px; }} }}
 """.strip()
 
@@ -655,6 +1047,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
         cohort_name = Path(cohort_report["html_path"]).name if cohort_report.get("html_path") else "cohort_report.html"
         chrome = self._shared_chrome(
             home_href="index.html",
+            logo_src="../../../cltr/docs/assets/logos/cltr.png",
             page_type="Home",
             page_meta="Report index for the CLTR study",
             menu_button_id="homeMenuButton",
@@ -662,10 +1055,10 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             menu_label="Navigate",
             menu_title="CLTR Destinations",
             menu_items_html=(
-                f"<a href='cltr_atlas.html' title='Open atlas'>Atlas<span>Study-wide hub and session index</span></a>"
-                f"<a href='../cohort/html/{html_escape(cohort_name)}' title='Open cohort report'>Cohort<span>Study-wide summary report</span></a>"
-                f"<a href='../sessions/{html_escape(session_reports[0]['session_id'])}/html/{html_escape(Path(session_reports[0]['html_path']).name)}' title='Open first session report'>Sessions<span>Session-level analytical reports</span></a>"
-                if session_reports else f"<a href='cltr_atlas.html' title='Open atlas'>Atlas<span>Study-wide hub</span></a>"
+                f"<a href='index.html' title='Open atlas'>Atlas<span>Study-wide hub and session index</span></a>"
+                f"<a href='cohort/{html_escape(cohort_name)}' title='Open cohort report'>Cohort<span>Study-wide summary report</span></a>"
+                f"<a href='sessions/{html_escape(session_reports[0]['session_id'])}/{html_escape(Path(session_reports[0]['html_path']).name)}' title='Open first session report'>Sessions<span>Session-level analytical reports</span></a>"
+                if session_reports else f"<a href='index.html' title='Open atlas'>Atlas<span>Study-wide hub</span></a>"
             ),
             show_secondary_bar=False,
             show_menu_button=False,
@@ -673,7 +1066,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
         return f"""<!doctype html><html><head><meta charset='utf-8'><title>{WORK_HOME_TITLE}</title>
 <style>
 {self._home_page_css()}
-</style></head><body class='reportKind--home'>{chrome}<main class='page'><section class='landing'><section class='hero'><section class='panel heroLead'><div class='eyebrow'>Report Index</div><h1 class='title'>{WORK_HOME_TITLE}</h1><p class='subtitle'>{WORK_HOME_SUBTITLE}. Framework outputs are generated here first, and the atlas bundle can then be published separately from these report artifacts.</p><div class='heroVisual'>{self._logo_image_svg()}<p class='heroVisualText'>This workspace contains the generated CLTR report bundle only. Public-site pages and publication assets are maintained separately under <code>work/cltr/docs</code>.</p></div></section></section></section></main><div class='copyrightNote'>{COPYRIGHT_NOTE}</div><script>
+</style></head><body class='reportKind--home'>{chrome}<main class='page'><section class='landing'><section class='hero'><section class='panel heroLead'><div class='eyebrow'>Report Index</div><h1 class='title'>{WORK_HOME_TITLE}</h1><p class='subtitle'>{WORK_HOME_SUBTITLE}. Framework outputs are generated here first, and the atlas bundle can then be published separately from these report artifacts.</p><div class='heroVisual'>{self._logo_image_html('../../../cltr/docs/assets/logos/cltr.png')}<p class='heroVisualText'>This workspace contains the generated CLTR report bundle only. Public-site pages and publication assets are maintained separately under <code>work/cltr/docs</code>.</p></div></section></section></section></main><div class='copyrightNote'>{COPYRIGHT_NOTE}</div><script>
 </script></body></html>"""
 
     def _spec(self, *, code: str, stem: str, title: str, summary: str, fig, tags: list[str], evidence_score: int, evidence_label: str, gating_note: str = "", phase_focus: str = "all", section: str = "results") -> dict:
@@ -731,7 +1124,22 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
     def _phase_segments(self, df: pd.DataFrame) -> list[tuple[float, float, str]]:
         if df.empty:
             return []
-        temp = df[["minute_index", "protocol_phase"]].dropna().sort_values("minute_index")
+        temp = df[["minute_index", "protocol_phase"]].dropna().copy()
+        if temp.empty:
+            return []
+        temp["minute_index"] = to_numeric(temp["minute_index"])
+        temp = temp.dropna(subset=["minute_index"]).copy()
+        if temp.empty:
+            return []
+        # In cohort figures, multiple sessions can contribute different phase labels
+        # at the same aligned minute. Use the dominant phase at each minute so the
+        # ribbon follows the study-wide protocol structure instead of an arbitrary row.
+        temp = (
+            temp.groupby("minute_index")["protocol_phase"]
+            .agg(lambda s: s.astype(str).value_counts().index[0] if not s.empty else np.nan)
+            .reset_index()
+            .sort_values("minute_index")
+        )
         if temp.empty:
             return []
         spans = []
@@ -755,7 +1163,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             ax.axvspan(start, end, color=colors[idx % len(colors)], alpha=0.45, lw=0)
             width = end - start
             if width >= 7:
-                ax.text((start + end) / 2.0, 1.01, PHASE_ABBR.get(phase, phase[:3].upper()), transform=ax.get_xaxis_transform(), ha="center", va="bottom", fontsize=8, color="#475569")
+                ax.text((start + end) / 2.0, 1.01, PHASE_ABBR.get(phase, phase[:3].upper()), transform=ax.get_xaxis_transform(), ha="center", va="bottom", fontsize=10, color="#475569")
 
     def _place_condition_legend(self, ax: plt.Axes, handles=None) -> None:
         labels = []
@@ -766,17 +1174,59 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
         labels = [label for label in labels if label]
         if not labels:
             return
-        ncols = min(len(labels), len(CONDITION_ORDER))
         ax.legend(
             handles=handles,
             frameon=False,
-            ncol=ncols,
+            ncol=len(labels),
             loc="upper center",
-            bbox_to_anchor=(0.5, 1.14),
-            columnspacing=1.2,
-            handletextpad=0.5,
+            bbox_to_anchor=(0.5, 1.16),
+            columnspacing=0.95,
+            handletextpad=0.42,
+            borderaxespad=0.0,
+            fontsize=10,
+        )
+
+    def _place_topbar_legend(self, ax: plt.Axes, handles=None, *, y: float = 1.14) -> None:
+        labels = []
+        if handles is None:
+            handles, labels = ax.get_legend_handles_labels()
+        else:
+            labels = [getattr(handle, "get_label", lambda: "")().strip() for handle in handles]
+        labels = [label for label in labels if label]
+        if not labels:
+            return
+        ax.legend(
+            handles=handles,
+            frameon=False,
+            ncol=len(labels),
+            loc="upper center",
+            bbox_to_anchor=(0.5, y),
+            columnspacing=0.95,
+            handletextpad=0.42,
             borderaxespad=0.0,
         )
+
+    def _normalize_legend_layout(self, ax: plt.Axes) -> None:
+        legend = ax.get_legend()
+        if legend is None:
+            return
+        labels = [text.get_text().strip() for text in legend.get_texts() if text.get_text().strip()]
+        if len(labels) <= 1:
+            return
+        if hasattr(legend, "set_ncols"):
+            legend.set_ncols(len(labels))
+        else:
+            legend._ncols = len(labels)
+        legend.set_frame_on(False)
+        try:
+            legend.set_bbox_to_anchor((0.5, 1.14), transform=ax.transAxes)
+        except Exception:
+            legend.set_bbox_to_anchor((0.5, 1.14))
+        try:
+            legend._loc = 9
+        except Exception:
+            pass
+        legend.set_alignment("center")
 
 
     def _session_window_utc(self, minute: pd.DataFrame) -> tuple[pd.Timestamp | None, pd.Timestamp | None]:
@@ -832,7 +1282,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             original_width = end - start
             visible_width = draw_end - draw_start
             if visible_width >= 3 or (visible_start is not None and visible_end is not None and original_width >= 7):
-                ax.text((draw_start + draw_end) / 2.0, 1.01, PHASE_ABBR.get(phase, phase[:3].upper()), transform=ax.get_xaxis_transform(), ha="center", va="bottom", fontsize=8, color="#475569", clip_on=False)
+                ax.text((draw_start + draw_end) / 2.0, 1.01, PHASE_ABBR.get(phase, phase[:3].upper()), transform=ax.get_xaxis_transform(), ha="center", va="bottom", fontsize=10, color="#475569", clip_on=False)
 
     def _clip_raw_source_window(self, df: pd.DataFrame, ts_col: str, minute: pd.DataFrame) -> pd.DataFrame:
         if df.empty or ts_col not in df.columns:
@@ -909,10 +1359,10 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
         if not any_trace:
             plt.close(fig)
             return None
-        ax.set_xlabel("Minutes since session start")
+        ax.set_xlabel(self._time_axis_label())
         ax.set_ylabel(ylabel)
         ax.grid(True, axis="y", alpha=0.25)
-        ax.legend(frameon=False, fontsize=8, ncol=2, loc="upper right")
+        ax.legend(frameon=False, fontsize=10, ncol=2, loc="upper right")
         if trim_to_support and support_x_min is not None and support_x_max is not None:
             pad = max((support_x_max - support_x_min) * 0.02, 0.1)
             visible_start = max(0.0, support_x_min - pad)
@@ -921,7 +1371,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             self._add_raw_phase_spans(ax, minute, start_utc, visible_start=visible_start, visible_end=visible_end)
         else:
             self._add_raw_phase_spans(ax, minute, start_utc)
-        fig.tight_layout()
+        fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.93))
         return fig
 
     def _raw_peak_raster(self, minute: pd.DataFrame, peaks: pd.DataFrame, ts_col: str = "datetime"):
@@ -939,7 +1389,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
         ax.vlines(x, 0, 1, color="#b91c1c", lw=0.7, alpha=0.8)
         ax.set_ylim(0, 1)
         ax.set_yticks([])
-        ax.set_xlabel("Minutes since session start")
+        ax.set_xlabel(self._time_axis_label())
         ax.set_ylabel("Peaks")
         if not x.empty:
             pad = max((float(x.max()) - float(x.min())) * 0.02, 0.1)
@@ -949,7 +1399,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             self._add_raw_phase_spans(ax, minute, start_utc, visible_start=visible_start, visible_end=visible_end)
         else:
             self._add_raw_phase_spans(ax, minute, start_utc)
-        fig.tight_layout()
+        fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.90))
         return fig
 
     def _raw_segment_windows(self, minute: pd.DataFrame, segments: pd.DataFrame):
@@ -978,7 +1428,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             visible_end = left + width if visible_end is None else max(visible_end, left + width)
         ax.set_yticks(range(len(plot)))
         ax.set_yticklabels([f"Segment {i+1}" for i in range(len(plot))])
-        ax.set_xlabel("Minutes since session start")
+        ax.set_xlabel(self._time_axis_label())
         ax.set_ylabel("Empatica segments")
         if visible_start is not None and visible_end is not None:
             pad = max((visible_end - visible_start) * 0.02, 0.1)
@@ -1051,6 +1501,9 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
     def _discrete_tick_values(self, values, metric: str) -> np.ndarray | None:
         if metric not in SPARSE_OBSERVATION_CHANNELS:
             return None
+        predefined = QUESTIONNAIRE_FULL_SCALES.get(metric)
+        if predefined is not None:
+            return predefined
         finite = to_numeric(pd.Series(values)).replace([np.inf, -np.inf], np.nan).dropna()
         if finite.empty:
             return None
@@ -1144,6 +1597,131 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
 
     def _is_control_signal_channel(self, column: str) -> bool:
         return column in CONTROL_SIGNAL_CHANNELS
+
+    def _axis_label(self, metric: str) -> str:
+        return AXIS_LABELS.get(str(metric), FEATURE_LABELS.get(str(metric), str(metric)))
+
+    def _compact_axis_label(self, metric: str) -> str:
+        label = self._axis_label(metric)
+        if "(ordinal scale)" in label:
+            return "Ordinal score"
+        match = re.search(r"\(([^)]+)\)\s*$", label)
+        if match:
+            return match.group(1)
+        return label
+
+    @staticmethod
+    def _time_axis_label() -> str:
+        return "Time in Session (min)"
+
+    @staticmethod
+    def _phase_axis_label() -> str:
+        return "Protocol Phase"
+
+    @staticmethod
+    def _condition_axis_label() -> str:
+        return "Experimental Condition"
+
+    def _cohort_questionnaire_caption(self, column: str, *, aggregated: bool = False) -> str:
+        if aggregated:
+            caption_map = {
+                "thermal_sensation": (
+                    "This panel summarizes session-level Thermal Sensation responses by protocol phase and condition. "
+                    "Each condition trace shows the median of session-level phase averages with an interquartile band, "
+                    "which makes cross-condition response patterns easier to compare than the raw event cloud."
+                ),
+                "thermal_comfort": (
+                    "This panel summarizes session-level Thermal Comfort responses by protocol phase and condition. "
+                    "Each condition trace shows the median of session-level phase averages with an interquartile band, "
+                    "so it is appropriate for comparing condition patterns rather than raw questionnaire-event density."
+                ),
+                "thermal_preference": (
+                    "This panel summarizes session-level Thermal Preference responses by protocol phase and condition. "
+                    "Because the underlying scale reflects directional preference choices, the condition summaries should be read "
+                    "as comparative preference patterns rather than as continuous intensities."
+                ),
+                "visual_sensation": (
+                    "This panel compares session-level Visual Sensation responses across conditions at the overall-comfort stage only. "
+                    "The single-phase display is intentional because Visual Sensation is collected as a global end-of-session appraisal."
+                ),
+                "color_sensation": (
+                    "This panel compares session-level Color Sensation responses across conditions at the overall-comfort stage only. "
+                    "The single-phase display is intentional because Color Sensation is collected as a global end-of-session appraisal."
+                ),
+                "thermal_pleasure": (
+                    "This panel summarizes session-level Thermal Pleasure responses by protocol phase and condition. "
+                    "The missing steady-state phase is a questionnaire-design feature, so the condition traces should be compared "
+                    "across FCS, SR, limited FFC, and OC only."
+                ),
+                "room_comfort": (
+                    "This panel compares session-level Room Comfort responses across conditions at the overall-comfort stage only. "
+                    "There is no earlier phase structure because Room Comfort is collected as an end-of-session global room appraisal."
+                ),
+                "visual_comfort": (
+                    "This panel compares session-level Visual Comfort responses across conditions at the overall-comfort stage only. "
+                    "The single-phase display is intentional because Visual Comfort is collected as a global end-of-session appraisal."
+                ),
+                "sound_comfort_dbA": (
+                    "This panel compares session-level Sound Comfort responses across conditions at the overall-comfort stage only. "
+                    "The single-phase display is intentional because Sound Comfort is collected as a global end-of-session appraisal."
+                ),
+                "air_quality_comfort": (
+                    "This panel compares session-level Air-Quality Comfort responses across conditions at the overall-comfort stage only. "
+                    "The single-phase display is intentional because this item is asked only in the overall-comfort questionnaire."
+                ),
+            }
+            return caption_map.get(
+                column,
+                f"This panel summarizes session-level {FEATURE_LABELS.get(column, column)} responses by phase and condition, using condition medians with interquartile bands instead of raw event points.",
+            )
+        caption_map = {
+            "thermal_sensation": (
+                "Thermal Sensation is shown as discrete questionnaire observations across FCS, SR, SS, and OC, with only limited "
+                "coverage in FFC. These are ordinal responses collected at questionnaire events, so they should be read as sparse "
+                "phase-specific observations rather than a continuous trajectory."
+            ),
+            "thermal_comfort": (
+                "Thermal Comfort is shown as discrete questionnaire observations across FCS, SR, SS, and OC, with only limited "
+                "coverage in FFC. Because the measure is collected at event times rather than every minute, the panel should be read "
+                "as a sparse ordinal response map, not as a continuous comfort trace."
+            ),
+            "thermal_preference": (
+                "Thermal Preference is shown as discrete event-time responses across FCS, SR, SS, and OC, with only limited FFC "
+                "coverage. The values reflect directional preference choices rather than a continuous intensity scale."
+            ),
+            "visual_sensation": (
+                "Visual Sensation is shown only in the overall-comfort phase because it is collected as a global end-of-session "
+                "visual appraisal rather than a repeated observation during the earlier protocol phases."
+            ),
+            "color_sensation": (
+                "Color Sensation is shown only in the overall-comfort phase because it is collected as a global end-of-session "
+                "appraisal, not as a repeated observation during the thermal protocol phases."
+            ),
+            "room_comfort": (
+                "Room Comfort is shown only in the overall-comfort phase because this questionnaire item is collected as an "
+                "end-of-session global room appraisal rather than a repeated phase-by-phase observation."
+            ),
+            "thermal_pleasure": (
+                "Thermal Pleasure is shown as discrete questionnaire observations in FCS, SR, limited FFC, and OC. It is absent "
+                "from SS in the questionnaire design, so the missing SS phase reflects instrument design rather than data loss."
+            ),
+            "visual_comfort": (
+                "Visual Comfort is shown only in the overall-comfort phase because it is collected as a global end-of-session "
+                "appraisal, not as a repeated observation during the thermal protocol phases."
+            ),
+            "sound_comfort_dbA": (
+                "Sound Comfort is shown only in the overall-comfort phase because it is collected as a global end-of-session "
+                "sound-environment appraisal, not as a repeated observation during the earlier protocol phases."
+            ),
+            "air_quality_comfort": (
+                "Air-Quality Comfort is shown only in the overall-comfort phase because it is collected as a global end-of-session "
+                "appraisal, not as a repeated observation during the earlier protocol phases."
+            ),
+        }
+        return caption_map.get(
+            column,
+            f"{FEATURE_LABELS.get(column, column)} is shown as phase-wise condition distributions with raw observation points; questionnaire responses are discrete event-time observations, not continuous trajectories.",
+        )
 
     def _display_series(self, values: pd.Series, column: str) -> pd.Series:
         series = to_numeric(values)
@@ -1481,6 +2059,76 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
     def _matrix_panel_html(self, title: str, df: pd.DataFrame, columns: list[str], n: int = 24) -> str:
         return self._render_table(df, title, columns, n=n)
 
+    def _feature_registry_display(self, df: pd.DataFrame) -> pd.DataFrame:
+        if df is None or df.empty:
+            return pd.DataFrame()
+        view = df.copy()
+        observed = to_numeric(view.get("observed_prompt_count", pd.Series(dtype=float)))
+        expected = to_numeric(view.get("expected_prompt_count", pd.Series(dtype=float)))
+        fraction = to_numeric(view.get("prompt_response_fraction", pd.Series(dtype=float)))
+
+        def format_prompt_support(idx: int) -> str:
+            obs = observed.iloc[idx] if idx < len(observed) else np.nan
+            exp = expected.iloc[idx] if idx < len(expected) else np.nan
+            frac = fraction.iloc[idx] if idx < len(fraction) else np.nan
+            if pd.notna(obs) and pd.notna(exp) and exp > 0:
+                frac_text = f" ({float(frac):.1%})" if pd.notna(frac) else ""
+                return f"{int(obs)}/{int(exp)}{frac_text}"
+            return ""
+
+        view["prompt_support"] = [format_prompt_support(i) for i in range(len(view))]
+        view["minute_occupancy_fraction"] = to_numeric(view.get("coverage_fraction", pd.Series(dtype=float)))
+        view["minute_occupancy_reading"] = view.get("coverage_reading", pd.Series(dtype=object)).fillna("")
+        return view
+
+    def _metric_unit(self, metric: str) -> str:
+        label = self._axis_label(metric)
+        match = re.search(r"\(([^)]+)\)\s*$", str(label))
+        return match.group(1) if match else ""
+
+    def _humanize_register_text(self, text: object, predictor: str = "", target: str = "") -> str:
+        out = str(text or "")
+        replacements = []
+        if predictor:
+            replacements.append((predictor, FEATURE_LABELS.get(predictor, predictor.replace("_", " "))))
+        if target:
+            replacements.append((target, FEATURE_LABELS.get(target, target.replace("_", " "))))
+        for raw, label in replacements:
+            out = out.replace(str(raw), str(label))
+        return out
+
+    def _threshold_response_register_display(self, df: pd.DataFrame) -> pd.DataFrame:
+        if df is None or df.empty:
+            return pd.DataFrame()
+        view = df.copy()
+        view["threshold_unit"] = view.get("predictor", pd.Series(dtype=object)).astype(str).map(self._metric_unit)
+        if "scientific_reading" in view.columns:
+            view["scientific_reading"] = [
+                self._humanize_register_text(text, predictor=str(pred), target=str(tgt))
+                for text, pred, tgt in zip(
+                    view["scientific_reading"],
+                    view.get("predictor", pd.Series(dtype=object)),
+                    view.get("target", pd.Series(dtype=object)),
+                )
+            ]
+        return view
+
+    def _scientific_decision_register_display(self, df: pd.DataFrame) -> pd.DataFrame:
+        if df is None or df.empty:
+            return pd.DataFrame()
+        view = df.copy()
+        view["threshold_unit"] = view.get("predictor", pd.Series(dtype=object)).astype(str).map(self._metric_unit)
+        if "practical_reading" in view.columns:
+            view["practical_reading"] = [
+                self._humanize_register_text(text, predictor=str(pred), target=str(tgt))
+                for text, pred, tgt in zip(
+                    view["practical_reading"],
+                    view.get("predictor", pd.Series(dtype=object)),
+                    view.get("target", pd.Series(dtype=object)),
+                )
+            ]
+        return view
+
     def _fig_endpoint_support_grades(self, support_df: pd.DataFrame):
         if support_df.empty:
             return None
@@ -1498,7 +2146,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
         ax.set_xlabel("Supported comparison phases")
         ax.set_xlim(0, 5)
         for idx, row in enumerate(plot_df.itertuples()):
-            ax.text(min(float(row.supported_phases) + 0.08, 4.95), idx, f"{row.support_grade} | min repeats={row.min_block_repeats} | summaries={row.total_block_phase_summaries}", va="center", fontsize=8, color="#172033")
+            ax.text(min(float(row.supported_phases) + 0.08, 4.95), idx, f"{row.support_grade} | min repeats={row.min_block_repeats} | summaries={row.total_block_phase_summaries}", va="center", fontsize=10, color="#172033")
         fig.tight_layout(rect=(0, 0, 1, 0.96))
         return fig
 
@@ -1527,7 +2175,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
         ax.set_xlabel("Dominant response phase")
         for idx, row in enumerate(plot_df.itertuples()):
             agreement_txt = f"agreement={row.dominant_agreement:.2f}" if pd.notna(row.dominant_agreement) else "agreement=n/a"
-            ax.text(float(x.iloc[idx]) + 0.08, idx, f"{row.direction.lower()} | {agreement_txt}", va="center", fontsize=8, color="#172033")
+            ax.text(float(x.iloc[idx]) + 0.08, idx, f"{row.direction.lower()} | {agreement_txt}", va="center", fontsize=10, color="#172033")
         ax.grid(True, axis="x", alpha=0.2)
         fig.tight_layout(rect=(0, 0, 1, 0.96))
         return fig
@@ -1637,7 +2285,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             for j, col in enumerate(phase_cols):
                 value = scaled.iloc[i, j]
                 if pd.notna(value):
-                    ax.text(j, i, f"{value:.2f}", ha="center", va="center", fontsize=8, color="#172033")
+                    ax.text(j, i, f"{value:.2f}", ha="center", va="center", fontsize=10, color="#172033")
         plt.colorbar(im, ax=ax, shrink=0.82, label="Within-endpoint scaled response")
         fig.tight_layout(rect=(0, 0, 1, 0.96))
         return fig
@@ -1670,7 +2318,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             for j, col in enumerate(phase_cols):
                 value = scaled.iloc[i, j]
                 if pd.notna(value):
-                    ax.text(j, i, f"{value:.2f}", ha="center", va="center", fontsize=8, color="#172033")
+                    ax.text(j, i, f"{value:.2f}", ha="center", va="center", fontsize=10, color="#172033")
         plt.colorbar(im, ax=ax, shrink=0.82, label="Within-endpoint signed display scale")
         fig.tight_layout(rect=(0, 0, 1, 0.96))
         return fig
@@ -1695,7 +2343,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             for j, col in enumerate(phase_cols):
                 value = values.iloc[i, j]
                 if pd.notna(value):
-                    ax.text(j, i, f"{value:.2f}", ha="center", va="center", fontsize=8, color="#172033")
+                    ax.text(j, i, f"{value:.2f}", ha="center", va="center", fontsize=10, color="#172033")
         plt.colorbar(im, ax=ax, shrink=0.82, label="Directional agreement across repeated blocks")
         fig.tight_layout(rect=(0, 0, 1, 0.96))
         return fig
@@ -1778,7 +2426,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             for j in range(pivot.shape[1]):
                 value = pivot.iloc[i, j]
                 if pd.notna(value):
-                    ax.text(j, i, f"{value:.2f}", ha="center", va="center", fontsize=8, color="#172033")
+                    ax.text(j, i, f"{value:.2f}", ha="center", va="center", fontsize=10, color="#172033")
         plt.colorbar(im, ax=ax, shrink=0.82, label="Spearman r")
         fig.tight_layout(rect=(0, 0, 1, 0.96))
         return fig
@@ -1821,7 +2469,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             same_sign_fraction = np.nan
             if qualified_phase_signs and r != 0:
                 same_sign_fraction = float(np.mean(np.array(qualified_phase_signs) == float(np.sign(r))))
-            ax.set_xlabel(FEATURE_LABELS.get(metric, metric))
+            ax.set_xlabel(self._axis_label(metric))
             ax.set_ylabel(comfort_label)
             self._apply_discrete_y_axis_matplotlib(ax, y, "thermal_comfort")
             stability_note = f", same-sign fraction across phases = {same_sign_fraction:.2f}" if pd.notna(same_sign_fraction) else ""
@@ -1842,7 +2490,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             conditions = sorted(comparison["condition_code"].astype(str).dropna().unique().tolist())
         total_cells = max(1, len(phases) * max(1, len(conditions)))
         rows = []
-        for metric in [m for m in COHORT_DERIVED_ENDPOINTS if m in comparison.columns]:
+        for metric in [m for m in COHORT_SUPPORT_GRADED_METRICS if m in comparison.columns]:
             supported = comparison.loc[to_numeric(comparison[metric]).notna()].copy()
             grouped = (
                 supported.groupby(["condition_code", "protocol_phase"])
@@ -1869,12 +2517,20 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             else:
                 grade = "insufficient"
                 reading = "Too sparse across the cohort comparison grid for a stable cohort-level reading."
+            if self._is_questionnaire_endpoint(metric):
+                basis = "questionnaire responses"
+            elif self._is_control_signal_channel(metric):
+                basis = "valid phase summaries (control/context)"
+            elif metric.endswith("_delta_bpm") or metric.endswith("_delta_uS") or metric.endswith("_delta_C"):
+                basis = "derived phase summaries"
+            else:
+                basis = "valid phase summaries"
             rows.append(
                 {
                     "metric": metric,
                     "endpoint": FEATURE_LABELS.get(metric, metric),
                     "support_grade": grade,
-                    "support_basis": "questionnaire responses" if self._is_questionnaire_endpoint(metric) else "valid phase summaries",
+                    "support_basis": basis,
                     "supported_phases": supported_phases,
                     "supported_conditions": supported_conditions,
                     "supported_condition_phase_cells": supported_cells,
@@ -1889,10 +2545,463 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
     def _cohort_primary_metrics(self, support_profile: pd.DataFrame) -> list[str]:
         if support_profile.empty:
             return []
+        support_profile = support_profile.loc[support_profile["metric"].isin(PRIMARY_ENDPOINTS)].copy()
+        if support_profile.empty:
+            return []
         strong = support_profile.loc[support_profile["support_grade"] == "strong", "metric"].tolist()
         if strong:
             return strong
         return support_profile.loc[support_profile["support_grade"] == "partial", "metric"].tolist()
+
+    def _metric_signal_streams(self, metric: str) -> list[str]:
+        mapping = {
+            "empatica_bvp_mean": ["empatica_bvp"],
+            "empatica_hr_mean_bpm": ["empatica_hr"],
+            "biopac_hr_mean_bpm": ["biopac_hr"],
+            "empatica_eda_mean_uS": ["empatica_eda"],
+            "biopac_eda_mean_uS": ["biopac_eda"],
+            "empatica_temp_mean_C": ["empatica_temp"],
+            "biopac_temp_chest_mean_C": ["biopac_temp"],
+            "empatica_acc_mean_g": ["empatica_acc"],
+            "empatica_enmo_mean_g": ["empatica_enmo"],
+            "empatica_steps": ["empatica_steps"],
+            "biopac_temp_thigh_mean_C": ["biopac_temp_thigh"],
+            "biopac_temp_arm_mean_C": ["biopac_temp_arm"],
+            "biopac_temp_tibia_mean_C": ["biopac_temp_tibia"],
+            "biopac_bloodflow_mean_bpu": ["biopac_bloodflow"],
+            "biopac_backscatter_mean_percent": ["biopac_backscatter"],
+            "hr_delta_bpm": ["empatica_hr", "biopac_hr"],
+            "eda_delta_uS": ["empatica_eda", "biopac_eda"],
+            "temp_delta_C": ["empatica_temp", "biopac_temp"],
+        }
+        return mapping.get(str(metric), [])
+
+    def _signal_role_map(self, signal_audit_summary: pd.DataFrame) -> dict[str, str]:
+        if signal_audit_summary is None or signal_audit_summary.empty:
+            return {}
+        out: dict[str, str] = {}
+        for _, row in signal_audit_summary.iterrows():
+            out[str(row.get("signal_stream", ""))] = str(row.get("recommended_role", ""))
+        return out
+
+    def _metric_allowed_in_scenario(self, metric: str, role_map: dict[str, str], scenario: str) -> bool:
+        streams = self._metric_signal_streams(metric)
+        if not streams:
+            return True
+        if scenario == "all_sources":
+            return True
+        if scenario == "valid_only":
+            allowed_roles = {"primary", "primary_with_qc"}
+            return all(role_map.get(stream, "") in allowed_roles for stream in streams)
+        return True
+
+    def _filter_support_profile_for_scenario(
+        self,
+        support_profile: pd.DataFrame,
+        signal_audit_summary: pd.DataFrame,
+        scenario: str,
+    ) -> pd.DataFrame:
+        if support_profile.empty:
+            return support_profile
+        role_map = self._signal_role_map(signal_audit_summary)
+        keep_mask = support_profile["metric"].astype(str).map(lambda metric: self._metric_allowed_in_scenario(metric, role_map, scenario))
+        return support_profile.loc[keep_mask].copy().reset_index(drop=True)
+
+    def _scenario_register(self, signal_audit_summary: pd.DataFrame) -> pd.DataFrame:
+        role_map = self._signal_role_map(signal_audit_summary)
+        catalog_order = [str(item["signal_stream"]) for item in DEVICE_STREAM_CATALOG]
+        all_streams = list(catalog_order)
+        for stream in sorted(role_map):
+            if stream not in all_streams:
+                all_streams.append(stream)
+        valid_streams = [stream for stream in all_streams if role_map.get(stream, "") in {"primary", "primary_with_qc"}]
+        excluded_streams = [stream for stream in all_streams if stream not in valid_streams]
+        fmt = lambda items: ", ".join(self._fmt_cell(item) for item in items) if items else "None"
+        excluded_notes = []
+        for stream in excluded_streams:
+            excluded_notes.append(f"{self._fmt_cell(stream)} ({self._fmt_cell(role_map.get(stream, 'not_audited'))})")
+        return pd.DataFrame(
+            [
+                {
+                    "scenario": "All-source",
+                    "included_streams": fmt(all_streams),
+                    "excluded_streams": "None",
+                    "scientific_use": "Audit view that preserves every available modality, including limited or subset-only streams.",
+                },
+                {
+                    "scenario": "Valid-only",
+                    "included_streams": fmt(valid_streams),
+                    "excluded_streams": ", ".join(excluded_notes) if excluded_notes else "None",
+                    "scientific_use": "Claim-supporting view restricted to streams judged primary or primary-with-QC in the signal audit.",
+                },
+            ]
+        )
+
+    def _modality_claim_register(self, signal_audit_summary: pd.DataFrame) -> pd.DataFrame:
+        if signal_audit_summary is None or signal_audit_summary.empty:
+            return pd.DataFrame()
+        rows = []
+        for _, row in signal_audit_summary.iterrows():
+            role = str(row.get("recommended_role", ""))
+            if role == "primary":
+                manuscript_use = "Claim-supporting"
+                manuscript_claim = "May support primary manuscript claims for this construct."
+            elif role == "primary_with_qc":
+                manuscript_use = "Claim-supporting with caveat"
+                manuscript_claim = "May support claims only if interpreted as device-specific and QC-qualified."
+            elif role in {"secondary_validation", "secondary_only", "subset_only"}:
+                manuscript_use = "Audit or sensitivity only"
+                manuscript_claim = "Do not use as standalone primary evidence; restrict to audit, validation, or sensitivity analyses."
+            else:
+                manuscript_use = "Do not claim"
+                manuscript_claim = "Not strong enough for manuscript evidence in the current release."
+            rows.append(
+                {
+                    "signal_stream": row.get("signal_stream", ""),
+                    "construct": row.get("construct", ""),
+                    "adequacy_status": row.get("adequacy_status", ""),
+                    "recommended_role": role,
+                    "manuscript_use": manuscript_use,
+                    "manuscript_claim": manuscript_claim,
+                }
+            )
+        return pd.DataFrame(rows)
+
+    def _endpoint_claim_register(self, support_profile: pd.DataFrame, signal_audit_summary: pd.DataFrame) -> pd.DataFrame:
+        if support_profile is None or support_profile.empty:
+            return pd.DataFrame()
+        role_map = self._signal_role_map(signal_audit_summary)
+        rows = []
+        for _, row in support_profile.iterrows():
+            metric = str(row.get("metric", ""))
+            streams = self._metric_signal_streams(metric)
+            roles = [role_map.get(stream, "") for stream in streams if role_map.get(stream, "")]
+            if not streams:
+                modality_gate = "not modality-gated"
+                claim_status = "Claim-supporting" if str(row.get("support_grade", "")) == "strong" else "Descriptive only"
+                claim_note = "Endpoint is not directly limited by wearable/lab modality validity; support grade controls its use."
+            elif roles and all(role in {"primary", "primary_with_qc"} for role in roles):
+                modality_gate = "valid-only eligible"
+                claim_status = "Claim-supporting" if str(row.get("support_grade", "")) == "strong" else "Descriptive with modality support"
+                claim_note = "Underlying modality streams pass the valid-only screen."
+            elif any(role in {"subset_only", "secondary_only", "secondary_validation", "not_primary", "not_recommended"} for role in roles):
+                modality_gate = "audit-only"
+                claim_status = "Audit or sensitivity only"
+                claim_note = "At least one required source stream is not eligible for valid-only interpretation."
+            else:
+                modality_gate = "unclear"
+                claim_status = "Needs review"
+                claim_note = "Modality-role mapping needs manual review."
+            rows.append(
+                {
+                    "endpoint": row.get("endpoint", metric),
+                    "support_grade": row.get("support_grade", ""),
+                    "support_basis": row.get("support_basis", ""),
+                    "modality_gate": modality_gate,
+                    "claim_status": claim_status,
+                    "claim_note": claim_note,
+                }
+            )
+        return pd.DataFrame(rows)
+
+    def _device_stream_inventory_register(self, minute: pd.DataFrame, signal_audit_summary: pd.DataFrame) -> pd.DataFrame:
+        role_map = self._signal_role_map(signal_audit_summary)
+        audit_lookup = {}
+        if signal_audit_summary is not None and not signal_audit_summary.empty:
+            for _, row in signal_audit_summary.iterrows():
+                audit_lookup[str(row.get("signal_stream", ""))] = row
+        minute_cols = set(minute.columns) if minute is not None and not minute.empty else set()
+        rows = []
+        for item in DEVICE_STREAM_CATALOG:
+            signal_stream = str(item["signal_stream"])
+            metric = str(item["metric"])
+            audit_row = audit_lookup.get(signal_stream)
+            audited = "yes" if audit_row is not None else "no"
+            comparable = "yes" if signal_stream in {"empatica_hr", "biopac_hr", "empatica_eda", "biopac_eda", "empatica_temp", "biopac_temp"} else "no"
+            if comparable == "yes":
+                comparison_class = "directly_comparable"
+            elif item["construct"] == "temperature_site":
+                comparison_class = "same_construct_not_paired"
+            elif item["construct"] in {"heart_rate", "eda", "temperature"}:
+                comparison_class = "device_specific"
+            else:
+                comparison_class = "source_only"
+            role = str(audit_row.get("recommended_role", "")) if audit_row is not None else ""
+            adequacy = str(audit_row.get("adequacy_status", "")) if audit_row is not None else ""
+            is_direct_analytic_feature = metric in ANALYTIC_FEATURES
+            if comparison_class == "same_construct_not_paired":
+                scientific_use = "Site-specific thermal stream; interpret within-device, not as a wearable-lab pair."
+            elif role == "primary_with_qc":
+                scientific_use = "Retain for analysis with QC caveat; do not treat as a clean interchangeable reference."
+            elif is_direct_analytic_feature:
+                scientific_use = "Retain as a direct analytic stream in the current cohort feature set."
+            else:
+                scientific_use = "Retain as an audited/report-only stream; not promoted into the core analytic feature set."
+            rows.append(
+                {
+                    "stream_label": item["label"],
+                    "device": item["device"],
+                    "construct": item["construct"],
+                    "comparison_class": comparison_class,
+                    "present_in_cohort_table": "yes" if metric in minute_cols else "no",
+                    "signal_audited": audited,
+                    "cross_device_comparable": comparable,
+                    "analytic_feature": "yes" if is_direct_analytic_feature else "no",
+                    "stream_usage": "direct_analytic_feature" if is_direct_analytic_feature else "audit_report_only",
+                    "scientific_use": scientific_use,
+                    "primary_endpoint": "yes" if endpoint_is_primary(metric) else "no",
+                    "endpoint_policy_role": endpoint_policy_role(metric),
+                    "recommended_role": role if role else "not_audited",
+                    "adequacy_status": adequacy if adequacy else "not_audited",
+                }
+            )
+        return pd.DataFrame(rows)
+
+    def _analysis_pathway_register(self, minute: pd.DataFrame, support_profile: pd.DataFrame, signal_audit_summary: pd.DataFrame) -> pd.DataFrame:
+        role_map = self._signal_role_map(signal_audit_summary)
+        support_lookup = {}
+        if support_profile is not None and not support_profile.empty:
+            for _, row in support_profile.iterrows():
+                support_lookup[str(row.get("metric", ""))] = row
+        minute_cols = set(minute.columns) if minute is not None and not minute.empty else set()
+        rows = []
+        catalog_metrics = {str(item["metric"]) for item in DEVICE_STREAM_CATALOG}
+        all_metrics = sorted(set(COHORT_DERIVED_ENDPOINTS) | set(ANALYTIC_FEATURES) | set(PRIMARY_ENDPOINTS) | catalog_metrics)
+        for metric in all_metrics:
+            if metric not in minute_cols and metric not in support_lookup:
+                continue
+            streams = self._metric_signal_streams(metric)
+            roles = [role_map.get(stream, "") for stream in streams if role_map.get(stream, "")]
+            if not streams:
+                pathway = "derived/context endpoint"
+            elif all(role in {"primary", "primary_with_qc"} for role in roles):
+                pathway = "valid-only eligible"
+            elif any(role in {"subset_only", "secondary_only", "secondary_validation", "not_primary", "not_recommended"} for role in roles):
+                pathway = "audit-only if included"
+            else:
+                pathway = "stream-role unclear"
+            support_row = support_lookup.get(metric)
+            if support_row is not None:
+                support_grade = str(support_row.get("support_grade", "")) or "not_scored"
+                support_basis = str(support_row.get("support_basis", "")) or "not scored in current cohort support profile"
+            elif metric in COHORT_SUPPORT_GRADED_METRICS:
+                support_grade = "not_scored"
+                support_basis = "support-graded endpoint, but no cohort support row was produced"
+            elif metric in catalog_metrics:
+                support_grade = "not_scored"
+                support_basis = "stream inventory metric; not part of cohort endpoint support grading"
+            else:
+                support_grade = "not_scored"
+                support_basis = "not included in the current cohort support-graded endpoint set"
+            rows.append(
+                {
+                    "endpoint": FEATURE_LABELS.get(metric, metric),
+                    "metric": metric,
+                    "in_cohort_table": "yes" if metric in minute_cols else "no",
+                    "source_streams": ", ".join(self._fmt_cell(stream) for stream in streams) if streams else "Not modality-gated",
+                    "support_grade": support_grade,
+                    "support_basis": support_basis,
+                    "primary_endpoint": "yes" if endpoint_is_primary(metric) else "no",
+                    "endpoint_policy_role": endpoint_policy_role(metric),
+                    "pathway_status": pathway,
+                }
+            )
+        return pd.DataFrame(rows)
+
+    def _flagged_stream_session_register(self, session_signal_audit: pd.DataFrame) -> pd.DataFrame:
+        if session_signal_audit is None or session_signal_audit.empty:
+            return pd.DataFrame()
+        temp = session_signal_audit.copy()
+        temp["concern_score"] = to_numeric(temp["concern_score"])
+        temp["coverage_penalty"] = (1.0 - to_numeric(temp.get("coverage_fraction", pd.Series(dtype=float))).fillna(0).clip(0, 1)) * 45.0
+        temp["plausibility_penalty"] = (1.0 - to_numeric(temp.get("plausible_fraction", pd.Series(dtype=float))).fillna(0).clip(0, 1)) * 30.0
+        quality = to_numeric(temp.get("quality_fraction", pd.Series(dtype=float)))
+        temp["quality_penalty"] = 0.0
+        quality_mask = quality.notna()
+        temp.loc[quality_mask, "quality_penalty"] = (1.0 - quality.loc[quality_mask].clip(0, 1)) * 20.0
+        paired_eligible = to_numeric(temp.get("paired_eligible", pd.Series(dtype=float))).fillna(0)
+        paired_spearman = to_numeric(temp.get("paired_spearman_r", pd.Series(dtype=float)))
+        temp["agreement_penalty"] = 0.0
+        agreement_mask = (paired_eligible > 0) & paired_spearman.notna()
+        temp.loc[agreement_mask, "agreement_penalty"] = ((0.7 - paired_spearman.loc[agreement_mask]) * 25.0).clip(lower=0, upper=15)
+        flagged = temp.loc[temp["concern_score"].fillna(0) > 0].copy()
+        if flagged.empty:
+            return pd.DataFrame()
+        rows = []
+        for signal_stream, d in flagged.groupby("signal_stream", sort=False):
+            d = d.sort_values(["concern_score", "session_id"], ascending=[False, True]).copy()
+            example_bits = []
+            for row in d.head(3).itertuples(index=False):
+                example_bits.append(
+                    f"{self._fmt_cell(getattr(row, 'session_id', ''))} ({float(getattr(row, 'concern_score', np.nan)):.1f})"
+                )
+            penalty_means = {
+                "coverage": float(to_numeric(d["coverage_penalty"]).mean()) if "coverage_penalty" in d.columns else 0.0,
+                "plausibility": float(to_numeric(d["plausibility_penalty"]).mean()) if "plausibility_penalty" in d.columns else 0.0,
+                "quality": float(to_numeric(d["quality_penalty"]).mean()) if "quality_penalty" in d.columns else 0.0,
+                "agreement": float(to_numeric(d["agreement_penalty"]).mean()) if "agreement_penalty" in d.columns else 0.0,
+            }
+            driver_map = {
+                "coverage": "Missingness / coverage",
+                "plausibility": "Plausibility / out-of-range values",
+                "quality": "Quality flag support",
+                "agreement": "Cross-device agreement",
+            }
+            primary_driver_key = max(penalty_means, key=penalty_means.get)
+            concern_profile = (
+                f"C:{penalty_means['coverage']:.1f} | "
+                f"P:{penalty_means['plausibility']:.1f} | "
+                f"Q:{penalty_means['quality']:.1f} | "
+                f"A:{penalty_means['agreement']:.1f}"
+            )
+            rows.append(
+                {
+                    "signal_stream": signal_stream,
+                    "device": d["device"].iloc[0],
+                    "construct": d["construct"].iloc[0],
+                    "flagged_session_streams": int(len(d)),
+                    "affected_sessions": int(d["session_id"].astype(str).nunique()),
+                    "primary_concern_driver": driver_map.get(primary_driver_key, primary_driver_key),
+                    "concern_profile": concern_profile,
+                    "top_flagged_sessions": ", ".join(example_bits),
+                    "max_concern_score": float(d["concern_score"].max()) if d["concern_score"].notna().any() else np.nan,
+                }
+            )
+        out = pd.DataFrame(rows)
+        if out.empty:
+            return out
+        return out.sort_values(["flagged_session_streams", "max_concern_score", "signal_stream"], ascending=[False, False, True]).reset_index(drop=True)
+
+    def _fig_cohort_hr_scenarios(self, cohort_phase: pd.DataFrame, signal_audit_summary: pd.DataFrame):
+        if cohort_phase.empty:
+            return None
+        role_map = self._signal_role_map(signal_audit_summary)
+        scenarios = [
+            ("All-source HR", [("empatica_hr_mean_bpm", "Empatica HR", "#b91c1c"), ("biopac_hr_mean_bpm", "BIOPAC HR", "#111827")]),
+            (
+                "Valid-only HR",
+                [
+                    item
+                    for item in [("empatica_hr_mean_bpm", "Empatica HR", "#b91c1c"), ("biopac_hr_mean_bpm", "BIOPAC HR", "#111827")]
+                    if self._metric_allowed_in_scenario(item[0], role_map, "valid_only")
+                ],
+            ),
+        ]
+        if not any(metric in cohort_phase.columns for _, items in scenarios for metric, _, _ in items):
+            return None
+        fig, axes = plt.subplots(len(scenarios), 1, figsize=(12.8, 4.2 * len(scenarios)), sharex=True)
+        if len(scenarios) == 1:
+            axes = [axes]
+        panel_notes: list[str] = []
+        for ax, (title, items) in zip(axes, scenarios):
+            available = [(metric, label, color) for metric, label, color in items if metric in cohort_phase.columns and to_numeric(cohort_phase[metric]).notna().any()]
+            if not available:
+                ax.axis("off")
+                panel_notes.append(f"{title} contains no retained cohort HR stream under the current scenario.")
+                continue
+            for metric, label, color in available:
+                grouped = (
+                    cohort_phase.loc[to_numeric(cohort_phase[metric]).notna()]
+                    .groupby("protocol_phase")[metric]
+                    .agg(q25=lambda s: s.quantile(0.25), median="median", q75=lambda s: s.quantile(0.75))
+                    .reindex(self._comparison_phase_sequence(cohort_phase["protocol_phase"]))
+                )
+                x = np.arange(len(grouped.index))
+                median = to_numeric(grouped["median"])
+                q25 = to_numeric(grouped["q25"])
+                q75 = to_numeric(grouped["q75"])
+                valid = median.notna()
+                ax.fill_between(x[valid], q25[valid], q75[valid], color=color, alpha=0.16)
+                ax.plot(x[valid], median[valid], marker="o", lw=2.2, color=color, label=label)
+            ax.set_title(title, loc="left", fontsize=14, fontweight="bold")
+            ax.set_ylabel(self._axis_label("biopac_hr_mean_bpm"))
+            ax.set_xticks(range(len(self._comparison_phase_sequence(cohort_phase["protocol_phase"]))))
+            ax.set_xticklabels([PHASE_ABBR.get(p, p[:3].upper()) for p in self._comparison_phase_sequence(cohort_phase["protocol_phase"])])
+            ax.grid(True, axis="y", color="#e2e8f0")
+            self._place_topbar_legend(ax)
+            panel_notes.append(f"{title} retains {', '.join(label for _, label, _ in available)}.")
+        axes[-1].set_xlabel(self._phase_axis_label())
+        fig._cltr_panel_notes = panel_notes
+        fig.tight_layout(rect=(0, 0, 1, 0.96))
+        return fig
+
+    def _fig_cohort_modality_scenarios(
+        self,
+        minute: pd.DataFrame,
+        signal_audit_summary: pd.DataFrame,
+        construct: str,
+    ):
+        if minute.empty:
+            return None
+        construct_map = {
+            "heart_rate": [("empatica_hr_mean_bpm", "Empatica HR", "#b91c1c"), ("biopac_hr_mean_bpm", "BIOPAC HR", "#111827")],
+            "eda": [("empatica_eda_mean_uS", "Empatica EDA", "#1d4ed8"), ("biopac_eda_mean_uS", "BIOPAC EDA", "#2563eb")],
+            "temperature": [("empatica_temp_mean_C", "Empatica Temperature", "#ea580c"), ("biopac_temp_chest_mean_C", "Chest Temperature", "#dc2626")],
+        }
+        ylabels = {
+            "heart_rate": "Heart rate (bpm)",
+            "eda": "EDA (uS)",
+            "temperature": "Temperature (C)",
+        }
+        specs = construct_map.get(str(construct), [])
+        if not specs:
+            return None
+        role_map = self._signal_role_map(signal_audit_summary)
+        scenarios = [
+            ("All-source", specs),
+            ("Valid-only", [item for item in specs if self._metric_allowed_in_scenario(item[0], role_map, "valid_only")]),
+        ]
+        fig, axes = plt.subplots(len(scenarios), 1, figsize=(13.0, 4.0 * len(scenarios)), sharex=True)
+        if len(scenarios) == 1:
+            axes = [axes]
+        phase_template = (
+            minute.loc[:, [c for c in ["minute_index", "protocol_phase"] if c in minute.columns]]
+            .dropna()
+            .sort_values("minute_index")
+            .drop_duplicates(subset=["minute_index"], keep="first")
+        )
+        panel_notes: list[str] = []
+        for ax, (scenario_title, scenario_specs) in zip(axes, scenarios):
+            available = [(metric, label, color) for metric, label, color in scenario_specs if metric in minute.columns and to_numeric(minute[metric]).notna().any()]
+            if not available:
+                ax.axis("off")
+                panel_notes.append(f"{scenario_title} contains no retained {construct.replace('_', ' ')} stream under the current scenario.")
+                continue
+            self._add_phase_spans(ax, phase_template)
+            for metric, label, color in available:
+                grouped = (
+                    minute.dropna(subset=["condition_code", metric])
+                    .groupby(["condition_code", "minute_index"])[metric]
+                    .agg(q25=lambda s: s.quantile(0.25), median="median", q75=lambda s: s.quantile(0.75))
+                    .reset_index()
+                )
+                for cond in [x for x in CONDITION_ORDER if x in grouped["condition_code"].astype(str).unique()]:
+                    cur = grouped.loc[grouped["condition_code"].astype(str) == cond].sort_values("minute_index")
+                    x = to_numeric(cur["minute_index"])
+                    q25 = to_numeric(cur["q25"])
+                    median = to_numeric(cur["median"])
+                    q75 = to_numeric(cur["q75"])
+                    valid = median.notna()
+                    ax.fill_between(x[valid], q25[valid], q75[valid], color=color, alpha=0.08)
+                    ax.plot(
+                        x[valid],
+                        median[valid],
+                        color=color,
+                        lw=2.0,
+                        alpha=0.95 if cond in {"DIM-MOR", "BRI-MOR"} else 0.65,
+                        ls="-" if cond in {"DIM-MOR", "BRI-MOR"} else "--",
+                    )
+            ax.set_ylabel(ylabels.get(str(construct), construct))
+            ax.grid(True, axis="y", color="#e2e8f0")
+            handles = [plt.Line2D([0], [0], color=color, lw=2, label=label) for _, label, color in available]
+            self._place_topbar_legend(ax, handles=handles)
+            panel_notes.append(
+                f"{scenario_title} scenario retains {', '.join(label for _, label, _ in available)} for {construct.replace('_', ' ')}."
+            )
+        axes[-1].set_xlabel(self._time_axis_label())
+        fig._cltr_panel_notes = panel_notes
+        fig.tight_layout(rect=(0, 0, 1, 0.96))
+        return fig
 
     def _cohort_response_matrix(self, cohort_phase: pd.DataFrame, support_profile: pd.DataFrame) -> pd.DataFrame:
         metrics = self._cohort_primary_metrics(support_profile)
@@ -1954,7 +3063,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             for j, col in enumerate(phase_cols):
                 value = scaled.iloc[i, j]
                 if pd.notna(value):
-                    ax.text(j, i, f"{value:.2f}", ha="center", va="center", fontsize=8, color="#172033")
+                    ax.text(j, i, f"{value:.2f}", ha="center", va="center", fontsize=10, color="#172033")
         plt.colorbar(im, ax=ax, shrink=0.82, label="Within-row display scale")
         fig.tight_layout(rect=(0, 0, 1, 0.96))
         return fig
@@ -2005,7 +3114,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             for j, col in enumerate(phase_cols):
                 value = scaled.iloc[i, j]
                 if pd.notna(value):
-                    ax.text(j, i, f"{value:.2f}", ha="center", va="center", fontsize=8, color="#172033")
+                    ax.text(j, i, f"{value:.2f}", ha="center", va="center", fontsize=10, color="#172033")
         plt.colorbar(im, ax=ax, shrink=0.82, label="Within-row signed display scale")
         fig.tight_layout(rect=(0, 0, 1, 0.96))
         return fig
@@ -2076,7 +3185,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             for j, col in enumerate(phase_cols):
                 value = values.iloc[i, j]
                 if pd.notna(value):
-                    ax.text(j, i, f"{value:.2f}", ha="center", va="center", fontsize=8, color="#172033")
+                    ax.text(j, i, f"{value:.2f}", ha="center", va="center", fontsize=10, color="#172033")
         plt.colorbar(im, ax=ax, shrink=0.82, label="Session-sign agreement")
         fig.tight_layout(rect=(0, 0, 1, 0.96))
         return fig
@@ -2089,9 +3198,10 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
         colors = temp["support_grade"].map({"strong": "#0f766e", "partial": "#f59e0b", "insufficient": "#b91c1c"}).fillna("#64748b")
         ax.barh(temp["endpoint"], temp["cell_coverage_fraction"], color=colors)
         for idx, row in enumerate(temp.itertuples()):
-            ax.text(float(row.cell_coverage_fraction) + 0.01, idx, f"{row.cell_coverage_fraction:.2f}", va="center", fontsize=9, color="#172033")
-        ax.set_xlabel("Condition-phase cell coverage")
+            ax.text(float(row.cell_coverage_fraction) + 0.01, idx, f"{float(row.cell_coverage_fraction):.0%}", va="center", fontsize=11, color="#172033")
+        ax.set_xlabel("Supported condition-phase cells (%)")
         ax.set_xlim(0, 1.05)
+        ax.xaxis.set_major_formatter(mticker.PercentFormatter(xmax=1.0, decimals=0))
         ax.grid(axis="x", color="#e2e8f0")
         fig.tight_layout(rect=(0, 0, 1, 0.96))
         return fig
@@ -2184,6 +3294,197 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
                 )
         return pd.DataFrame(rows)
 
+    def _scenario_title_prefix(self, scenario: str) -> str:
+        return {
+            "all_sources": "All-source",
+            "valid_only": "Valid-only",
+        }.get(str(scenario), "Scenario")
+
+    def _policy_gate_register(
+        self,
+        c: dict,
+        support_profile: pd.DataFrame,
+        signal_audit_summary: pd.DataFrame,
+        all_source_response_matrix: pd.DataFrame,
+        valid_only_response_matrix: pd.DataFrame,
+    ) -> pd.DataFrame:
+        rows = []
+        sample_status = c.get("sample_status", pd.DataFrame())
+        if not sample_status.empty:
+            row = sample_status.iloc[0]
+            inferential_ok = bool(row.get("cohort_inference_eligible", 0))
+            rows.append(
+                {
+                    "gate": "Sample adequacy",
+                    "status": "pass" if inferential_ok else "descriptive_only",
+                    "threshold": f">={int(row.get('min_sessions_required', 0))} sessions and >={int(row.get('min_participants_required', 0))} participants",
+                    "observed_value": f"{int(row.get('n_sessions', 0))} sessions / {int(row.get('n_participants', 0))} participants",
+                    "evidence_basis": "Cohort sample-status register",
+                    "scientific_implication": "Controls whether Chapter 5 may support inferential cohort claims or only descriptive scientific reporting.",
+                }
+            )
+        qc = c.get("preprocessing_qc_summary", pd.DataFrame())
+        if not qc.empty:
+            mean_valid = float(to_numeric(qc["valid_fraction"]).mean())
+            rows.append(
+                {
+                    "gate": "Minute-level preprocessing QC",
+                    "status": "pass" if mean_valid >= 0.80 else ("conditional" if mean_valid >= 0.60 else "limited"),
+                    "threshold": "Mean valid fraction >= 0.80 across QC channels",
+                    "observed_value": f"{mean_valid:.2f} mean valid fraction across {len(qc)} channels",
+                    "evidence_basis": "Preprocessing quality diagnostics",
+                    "scientific_implication": "Determines whether physiological and environmental windows can be interpreted as sufficiently quality-controlled.",
+                }
+            )
+        if not support_profile.empty:
+            primary_support = support_profile.loc[support_profile["metric"].isin(PRIMARY_ENDPOINTS)].copy()
+            strong_primary = int((primary_support.get("support_grade", pd.Series(dtype=str)) == "strong").sum()) if not primary_support.empty else 0
+            rows.append(
+                {
+                    "gate": "Primary endpoint support breadth",
+                    "status": "pass" if strong_primary > 0 else "descriptive_only",
+                    "threshold": "At least one strong-support primary endpoint",
+                    "observed_value": f"{strong_primary} strong primary endpoints",
+                    "evidence_basis": "Endpoint support grading matrix",
+                    "scientific_implication": "Controls whether the primary scientific result layer is claim-supporting or restricted to descriptive partial-support endpoints.",
+                }
+            )
+        if not signal_audit_summary.empty:
+            roles = signal_audit_summary.get("recommended_role", pd.Series(dtype=str)).astype(str)
+            primary = int(roles.isin(["primary", "primary_with_qc"]).sum())
+            subset_only = int((roles == "subset_only").sum())
+            rows.append(
+                {
+                    "gate": "Modality validity screen",
+                    "status": "pass" if primary > 0 else "limited",
+                    "threshold": "At least one primary or QC-qualified primary stream family",
+                    "observed_value": f"{primary} primary/QC-qualified streams, {subset_only} subset-only streams",
+                    "evidence_basis": "Signal audit summary and modality claim register",
+                    "scientific_implication": "Ensures Chapter 5 results are anchored in scientifically valid stream families rather than audit-only or subset-only measurements.",
+                }
+            )
+        diagnostics = c.get("mixed_effects_diagnostics", pd.DataFrame())
+        if not diagnostics.empty:
+            retained = diagnostics.loc[diagnostics["status"].astype(str).isin(["retained", "retained_with_fit_issue"])].copy()
+            converged = int(to_numeric(retained.get("fit_converged", pd.Series(dtype=float))).fillna(0).sum()) if not retained.empty else 0
+            rows.append(
+                {
+                    "gate": "Mixed-effects inferential eligibility",
+                    "status": "pass" if converged > 0 else "descriptive_only",
+                    "threshold": "At least one retained converged mixed-effects endpoint",
+                    "observed_value": f"{converged} converged retained fits out of {len(diagnostics)} attempted endpoints",
+                    "evidence_basis": "Mixed-effects fit diagnostics",
+                    "scientific_implication": "Determines whether inferential fixed-effect estimates can enter the scientific results layer.",
+                }
+            )
+        benchmarks = c.get("predictive_benchmarks", pd.DataFrame())
+        if not benchmarks.empty:
+            best = benchmarks.sort_values(["balanced_accuracy_mean", "macro_f1_mean"], ascending=[False, False]).iloc[0]
+            rows.append(
+                {
+                    "gate": "Predictive generalization availability",
+                    "status": "pass",
+                    "threshold": "Holdout benchmark results available across at least one explicit grouping scheme",
+                    "observed_value": f"{best['model']} / {best['feature_set']} / {best['validation_scheme']} on {best['task']} with balanced accuracy {float(best['balanced_accuracy_mean']):.2f}",
+                    "evidence_basis": "Validation-aware predictive benchmarks",
+                    "scientific_implication": "Allows Chapter 5 to report predictive evidence as a generalization check rather than only descriptive patterning.",
+                }
+            )
+        if not all_source_response_matrix.empty or not valid_only_response_matrix.empty:
+            rows.append(
+                {
+                    "gate": "Scenario sensitivity visibility",
+                    "status": "pass",
+                    "threshold": "All-source and valid-only scenario views both available",
+                    "observed_value": f"{len(all_source_response_matrix)} all-source rows / {len(valid_only_response_matrix)} valid-only rows",
+                    "evidence_basis": "Scenario-specific response matrices",
+                    "scientific_implication": "Makes sensitivity to modality inclusion explicit instead of leaving it implicit in the final result layer.",
+                }
+            )
+        return pd.DataFrame(rows)
+
+    def _robustness_register(
+        self,
+        c: dict,
+        support_profile: pd.DataFrame,
+        all_source_response_matrix: pd.DataFrame,
+        valid_only_response_matrix: pd.DataFrame,
+    ) -> pd.DataFrame:
+        rows = []
+        if not support_profile.empty:
+            strong = int((support_profile.get("support_grade", pd.Series(dtype=str)) == "strong").sum())
+            partial = int((support_profile.get("support_grade", pd.Series(dtype=str)) == "partial").sum())
+            rows.append(
+                {
+                    "gate": "Endpoint support robustness",
+                    "status": "stable" if strong > 0 else ("partial" if partial > 0 else "limited"),
+                    "observed_value": f"{strong} strong endpoints, {partial} partial endpoints",
+                    "evidence_basis": "Endpoint support grading matrix",
+                    "scientific_reading": "Primary results are more defensible when at least one endpoint remains in the strong-support tier.",
+                }
+            )
+        if not all_source_response_matrix.empty or not valid_only_response_matrix.empty:
+            shared = sorted(set(all_source_response_matrix.get("row_label", pd.Series(dtype=str))).intersection(set(valid_only_response_matrix.get("row_label", pd.Series(dtype=str)))))
+            shared_fraction = float(len(shared) / max(1, len(all_source_response_matrix))) if len(all_source_response_matrix) else np.nan
+            rows.append(
+                {
+                    "gate": "Scenario sensitivity",
+                    "status": "stable" if pd.notna(shared_fraction) and shared_fraction >= 0.60 else "conditional",
+                    "observed_value": f"{len(shared)} shared rows across all-source and valid-only layers",
+                    "evidence_basis": "Scenario-specific response matrices",
+                    "scientific_reading": "High overlap indicates that Chapter 5 patterns are not driven only by weaker or subset-only modalities.",
+                }
+            )
+        contrasts = c.get("condition_contrasts", pd.DataFrame())
+        if not contrasts.empty and "p_value_fdr" in contrasts.columns:
+            significant = int((to_numeric(contrasts["p_value_fdr"]) < 0.05).sum())
+            rows.append(
+                {
+                    "gate": "Multiplicity-controlled contrasts",
+                    "status": "stable" if significant > 0 else "null_after_correction",
+                    "observed_value": f"{significant} FDR-significant contrasts",
+                    "evidence_basis": "Multiplicity-corrected contrast register",
+                    "scientific_reading": "Significant corrected contrasts indicate that condition differences persist after multiplicity control.",
+                }
+            )
+        diagnostics = c.get("mixed_effects_diagnostics", pd.DataFrame())
+        if not diagnostics.empty:
+            retained = diagnostics.loc[diagnostics["status"].astype(str).isin(["retained", "retained_with_fit_issue"])].copy()
+            converged_fraction = float(to_numeric(retained.get("fit_converged", pd.Series(dtype=float))).mean()) if not retained.empty else np.nan
+            rows.append(
+                {
+                    "gate": "Model-fit stability",
+                    "status": "stable" if pd.notna(converged_fraction) and converged_fraction >= 0.75 else ("conditional" if not retained.empty else "not_available"),
+                    "observed_value": f"{converged_fraction:.2f}" if pd.notna(converged_fraction) else "n/a",
+                    "evidence_basis": "Mixed-effects fit diagnostics",
+                    "scientific_reading": "Higher convergence among retained models supports more reliable inferential interpretation.",
+                }
+            )
+        benchmarks = c.get("predictive_benchmarks", pd.DataFrame())
+        if not benchmarks.empty:
+            best = benchmarks.sort_values(["balanced_accuracy_mean", "macro_f1_mean"], ascending=[False, False]).iloc[0]
+            sd = float(best["balanced_accuracy_sd"]) if pd.notna(best.get("balanced_accuracy_sd", np.nan)) else np.nan
+            rows.append(
+                {
+                    "gate": "Predictive stability",
+                    "status": "stable" if pd.notna(sd) and sd <= 0.10 else "conditional",
+                    "observed_value": f"{float(best['balanced_accuracy_mean']):.2f} +/- {sd:.2f}" if pd.notna(sd) else f"{float(best['balanced_accuracy_mean']):.2f}",
+                    "evidence_basis": "Participant-grouped predictive benchmarks",
+                    "scientific_reading": "Lower fold-to-fold variability indicates more stable subject-independent predictive behavior.",
+                }
+            )
+        partial_count = int((support_profile.get("support_grade", pd.Series(dtype=str)) != "strong").sum()) if not support_profile.empty else 0
+        rows.append(
+            {
+                "gate": "Partial-result quarantine",
+                "status": "pass" if partial_count >= 0 else "pass",
+                "observed_value": f"{partial_count} endpoints held outside the primary result layer",
+                "evidence_basis": "Partial-results register",
+                "scientific_reading": "Endpoints with incomplete support remain visible but are explicitly quarantined from the primary scientific result layer.",
+            }
+        )
+        return pd.DataFrame(rows)
+
     def _fig_cohort_relationship_heatmap(self, relation_df: pd.DataFrame):
         if relation_df.empty:
             return None
@@ -2203,7 +3504,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             for j in range(pivot.shape[1]):
                 value = pivot.iloc[i, j]
                 if pd.notna(value):
-                    ax.text(j, i, f"{value:.2f}", ha="center", va="center", fontsize=8, color="#172033")
+                    ax.text(j, i, f"{value:.2f}", ha="center", va="center", fontsize=10, color="#172033")
         plt.colorbar(im, ax=ax, shrink=0.82, label="Spearman r")
         fig.tight_layout(rect=(0, 0, 1, 0.96))
         return fig
@@ -2247,8 +3548,8 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             same_sign_fraction = np.nan
             if qualified_condition_signs and r != 0:
                 same_sign_fraction = float(np.mean(np.array(qualified_condition_signs) == float(np.sign(r))))
-            ax.set_xlabel(f"{FEATURE_LABELS.get(metric, metric)} delta")
-            ax.set_ylabel("Thermal Comfort delta")
+            ax.set_xlabel(f"{self._axis_label(metric)} Change")
+            ax.set_ylabel("Thermal Comfort Change (ordinal scale)")
             stability_note = f", same-sign fraction across conditions = {same_sign_fraction:.2f}" if pd.notna(same_sign_fraction) else ""
             panel_notes.append(f"{position} shows thermal comfort delta versus {FEATURE_LABELS.get(metric, metric)} delta with Spearman r = {r:.2f}, n = {len(pair)} retained sessions{stability_note}.")
         fig._cltr_panel_notes = panel_notes
@@ -2386,7 +3687,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             legend={"orientation": "h", "yanchor": "bottom", "y": 1.02, "xanchor": "left", "x": 0.0},
             hovermode="x unified",
         )
-        fig.update_xaxes(title_text="Minute index", showgrid=True, gridcolor="#eef2f7", zeroline=False)
+        fig.update_xaxes(title_text=self._time_axis_label(), showgrid=True, gridcolor="#eef2f7", zeroline=False)
         fig.update_yaxes(title_text=y_title, showgrid=True, gridcolor="#eef2f7", zeroline=False)
         return fig
 
@@ -2426,9 +3727,9 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
                     ax.plot(x[mask], y[mask], color=spec["color"], lw=1.8, label=spec["label"])
                     ax.scatter(x[mask], y[mask], color=spec["color"], s=8, alpha=0.45)
             ax.set_ylabel("Temperature (C)")
-            ax.set_xlabel("Minute index")
+            ax.set_xlabel(self._time_axis_label())
             ax.grid(True, axis="y")
-            ax.legend(loc="upper left", ncol=2, frameon=False, fontsize=9)
+            ax.legend(loc="upper left", ncol=2, frameon=False, fontsize=11)
         else:
             fig, axes = plt.subplots(len(available), 1, figsize=(13.2, 2.35 * len(available) + 0.8), sharex=True)
             if len(available) == 1:
@@ -2449,7 +3750,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
                     ax.scatter(x[mask], y[mask], color=spec["color"], s=9, alpha=0.7)
                 ax.set_ylabel(spec["label"])
                 ax.grid(True, axis="y")
-            axes[-1].set_xlabel("Minute index")
+            axes[-1].set_xlabel(self._time_axis_label())
         fig.tight_layout()
         return fig
 
@@ -2477,8 +3778,8 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
         else:
             ax.plot(x[mask], y[mask], color=color, lw=1.9)
             ax.scatter(x[mask], y[mask], color=color, s=11, alpha=0.72)
-        ax.set_ylabel(FEATURE_LABELS.get(column, column))
-        ax.set_xlabel("Minute index")
+        ax.set_ylabel(self._axis_label(column))
+        ax.set_xlabel(self._time_axis_label())
         ax.grid(True, axis="y")
         self._apply_discrete_y_axis_matplotlib(ax, y[mask], column)
         note = self._support_note(minute, [column])
@@ -2526,7 +3827,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             legend={"orientation": "h", "yanchor": "bottom", "y": 1.02, "xanchor": "left", "x": 0.0},
         )
         fig.update_xaxes(title_text="Protocol block")
-        fig.update_yaxes(title_text=FEATURE_LABELS.get(metric, metric), showgrid=True, gridcolor="#eef2f7", zeroline=False)
+        fig.update_yaxes(title_text=self._axis_label(metric), showgrid=True, gridcolor="#eef2f7", zeroline=False)
         self._apply_discrete_y_axis_plotly(fig, phase[metric], metric)
         return fig
 
@@ -2687,8 +3988,8 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             self._spec(
                 code="S04",
                 stem=f"{s['session_id']}_coverage",
-                title="Aligned support map by minute",
-                summary="The aligned minute-level support map separates missing support from absent response and shows where questionnaire, physiological, indoor, and overlap support are actually available.",
+                title="Aligned availability and overlap map by minute",
+                summary="The aligned minute-level availability and overlap map separates missing support from absent response and shows where questionnaire, source presence, and paired non-null overlap are actually available.",
                 fig=self._fig_session_coverage(minute, s["processing_metadata"]),
                 tags=["qc", "support", "preprocessing"],
                 evidence_score=ev["score"],
@@ -2928,7 +4229,19 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
         sample_status = c["sample_status"]
         ev = self._cohort_evidence(sample_status)
         support_profile = self._cohort_endpoint_support_profile(c.get("cohort_phase_summary", pd.DataFrame()))
+        scenario_register = self._scenario_register(c.get("signal_audit_summary", pd.DataFrame()))
+        modality_claim_register = self._modality_claim_register(c.get("signal_audit_summary", pd.DataFrame()))
+        endpoint_claim_register = self._endpoint_claim_register(support_profile, c.get("signal_audit_summary", pd.DataFrame()))
+        device_stream_inventory = self._device_stream_inventory_register(c.get("cohort_minute_features", pd.DataFrame()), c.get("signal_audit_summary", pd.DataFrame()))
+        analysis_pathway_register = self._analysis_pathway_register(c.get("cohort_minute_features", pd.DataFrame()), support_profile, c.get("signal_audit_summary", pd.DataFrame()))
+        all_source_support = self._filter_support_profile_for_scenario(support_profile, c.get("signal_audit_summary", pd.DataFrame()), "all_sources")
+        valid_only_support = self._filter_support_profile_for_scenario(support_profile, c.get("signal_audit_summary", pd.DataFrame()), "valid_only")
         has_strong = bool((support_profile.get("support_grade", pd.Series(dtype=str)) == "strong").any()) if not support_profile.empty else False
+        signal_audit_summary = c.get("signal_audit_summary", pd.DataFrame())
+        role_counts = signal_audit_summary.get("recommended_role", pd.Series(dtype=str)).astype(str).value_counts() if not signal_audit_summary.empty else pd.Series(dtype=int)
+        primary_stream_count = int(role_counts.get("primary", 0))
+        qc_primary_stream_count = int(role_counts.get("primary_with_qc", 0))
+        subset_only_stream_count = int(role_counts.get("subset_only", 0))
         result_prefix = "Primary-result" if has_strong else "Partial-result descriptive"
         result_summary_suffix = (
             "Only strong-support endpoints are carried into this result layer."
@@ -2936,9 +4249,15 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             else "No endpoint reaches strong cohort support in the current sample, so this layer is shown descriptively from partial-support endpoints only."
         )
         response_matrix = self._cohort_response_matrix(c.get("cohort_phase_summary", pd.DataFrame()), support_profile)
+        all_source_response_matrix = self._cohort_response_matrix(c.get("cohort_phase_summary", pd.DataFrame()), all_source_support)
+        valid_only_response_matrix = self._cohort_response_matrix(c.get("cohort_phase_summary", pd.DataFrame()), valid_only_support)
         delta_matrix = self._cohort_delta_matrix(c.get("cohort_phase_summary", pd.DataFrame()), support_profile)
         agreement_matrix = self._cohort_directional_agreement_matrix(c.get("cohort_phase_summary", pd.DataFrame()), support_profile)
         relationship_matrix = self._cohort_relationship_matrix(c.get("cohort_phase_summary", pd.DataFrame()), support_profile)
+        all_source_relationship_matrix = self._cohort_relationship_matrix(c.get("cohort_phase_summary", pd.DataFrame()), all_source_support)
+        valid_only_relationship_matrix = self._cohort_relationship_matrix(c.get("cohort_phase_summary", pd.DataFrame()), valid_only_support)
+        policy_gate_register = self._policy_gate_register(c, support_profile, signal_audit_summary, all_source_response_matrix, valid_only_response_matrix)
+        robustness_register = self._robustness_register(c, support_profile, all_source_response_matrix, valid_only_response_matrix)
 
         narrative = [
             self._spec(
@@ -2956,9 +4275,21 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             self._spec(
                 code="C03",
                 stem="cohort_window_validation",
-                title="Paired-device validation profile",
-                summary="Paired-device validation is separated from session structure so overlap, eligibility, and agreement can be assessed directly for heart rate, electrodermal activity, and temperature.",
+                title="Audited device-stream landscape",
+                summary=f"All audited Empatica and BIOPAC streams are shown together so adequacy, role assignment, and raw validity components can be read across the full modality inventory rather than only through the directly comparable subset. In the current audit, the stream mix comprises {primary_stream_count} primary streams, {qc_primary_stream_count} QC-qualified primary streams, and {subset_only_stream_count} subset-only stream; this figure should therefore be read as a full modality landscape rather than as a summary of only the directly comparable device pairs.",
                 fig=self._fig_cohort_window_validation(c),
+                tags=["overview", "qc", "support", "agreement"],
+                evidence_score=ev["score"],
+                evidence_label=ev["label"],
+                gating_note=ev["note"],
+                section="frontmatter",
+            ),
+            self._spec(
+                code="C03A",
+                stem="cohort_comparable_validation",
+                title="Comparable-family validation summary",
+                summary="The directly comparable Empatica/BIOPAC families are summarized separately so overlap, validation readiness, and agreement strength for heart rate, electrodermal activity, and temperature are visible without collapsing the full audit into only those families.",
+                fig=self._fig_cohort_comparable_validation_summary(c),
                 tags=["overview", "qc", "support", "agreement"],
                 evidence_score=ev["score"],
                 evidence_label=ev["label"],
@@ -2968,8 +4299,8 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             self._spec(
                 code="C04",
                 stem="cohort_support_map",
-                title="Phase-annotated cohort support map",
-                summary="Support is aggregated by condition and minute across the full protocol timeline so acclimation, intervention, and terminal phases remain visible before cohort trajectories and derived summaries are interpreted.",
+                title="Phase-annotated cohort availability and overlap map",
+                summary="Availability and paired non-null overlap are aggregated by condition and minute across the full protocol timeline so acclimation, intervention, and terminal phases remain visible before audited validity and derived summaries are interpreted.",
                 fig=self._fig_cohort_support_map(c.get("cohort_minute_features", c.get("cohort_minute_comparison_window", pd.DataFrame()))),
                 tags=["overview", "qc", "support", "phase"],
                 evidence_score=ev["score"],
@@ -2982,6 +4313,110 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
         narrative.extend(self._build_cohort_condition_trace_specs(c["cohort_minute_features"], ev))
         narrative.extend(
             [
+                self._spec(
+                    code="C06E",
+                    stem="cohort_hr_scenario_trends",
+                    title="Heart-rate measured-trend scenarios",
+                    summary="These measured-trend panels compare the all-source and valid-only heart-rate scenarios so the effect of excluding subset-only Empatica heart rate is visible at the trajectory level.",
+                    fig=self._fig_cohort_modality_scenarios(c.get("cohort_minute_features", pd.DataFrame()), c.get("signal_audit_summary", pd.DataFrame()), "heart_rate"),
+                    tags=["heart_rate", "scenario", "phase", "qc"],
+                    evidence_score=ev["score"],
+                    evidence_label=ev["label"],
+                    gating_note=ev["note"],
+                    section="physiological",
+                ),
+                self._spec(
+                    code="C06F",
+                    stem="cohort_eda_scenario_trends",
+                    title="Electrodermal measured-trend scenarios",
+                    summary="These measured-trend panels compare all-source and valid-only electrodermal views so device-specific inclusion and exclusion rules remain explicit when EDA is shown in the manuscript.",
+                    fig=self._fig_cohort_modality_scenarios(c.get("cohort_minute_features", pd.DataFrame()), c.get("signal_audit_summary", pd.DataFrame()), "eda"),
+                    tags=["eda", "scenario", "phase", "qc"],
+                    evidence_score=ev["score"],
+                    evidence_label=ev["label"],
+                    gating_note=ev["note"],
+                    section="physiological",
+                ),
+                self._spec(
+                    code="C06G",
+                    stem="cohort_temperature_scenario_trends",
+                    title="Temperature measured-trend scenarios",
+                    summary="These measured-trend panels compare all-source and valid-only temperature views so wearable and laboratory thermal signals can be inspected under the same scenario rules used later in the result layer.",
+                    fig=self._fig_cohort_modality_scenarios(c.get("cohort_minute_features", pd.DataFrame()), c.get("signal_audit_summary", pd.DataFrame()), "temperature"),
+                    tags=["temperature", "scenario", "phase", "qc"],
+                    evidence_score=ev["score"],
+                    evidence_label=ev["label"],
+                    gating_note=ev["note"],
+                    section="physiological",
+                ),
+                self._html_spec(
+                    code="C07AA",
+                    stem="cohort_master_table_registry",
+                    title="Aligned master-table readiness register",
+                    summary="This register reports the support status of the aligned minute-level master table across the major modality layers and paired-overlap gates. `Source coverage` rows are reported as fractions on a 0-1 scale, while `paired overlap` rows are reported in minutes. Threshold, observed, mean, and median values use the unit shown in the `Unit` column. It is the operational entry point for the Chapter 5 scientific result layer.",
+                    html_fragment=self._matrix_panel_html(
+                        "Aligned Master-Table Readiness Register",
+                        c.get("master_table_registry", pd.DataFrame()),
+                        ["layer", "gate_type", "unit", "status", "threshold", "observed_value", "mean_value", "median_value", "n_sessions_supported", "scientific_use"],
+                        n=24,
+                    ),
+                    tags=["matrix", "qc", "support", "pipeline"],
+                    evidence_score=ev["score"],
+                    evidence_label=ev["label"],
+                    gating_note=ev["note"],
+                    section="analyzed",
+                ),
+                self._html_spec(
+                    code="C07AB",
+                    stem="cohort_feature_registry",
+                    title="Derived feature registry",
+                    summary="This registry documents the aligned feature space used by the Chapter 5 scientific result layer, separating primary endpoints, QC gates, support gates, and analytic covariates. For questionnaire-derived responses, the scientific denominator is expected prompts rather than elapsed time, so `Prompt Support` is the primary completeness reading. `Minute Occupancy` remains a technical aligned-minute audit field and should not be treated as the main completeness measure for discrete responses. Use `Observation Policy`, `Prompt Support Reading`, and `Minute Occupancy Reading` together.",
+                    html_fragment=self._matrix_panel_html(
+                        "Derived Feature Registry",
+                        self._feature_registry_display(c.get("feature_registry", pd.DataFrame())),
+                        ["feature", "domain", "registry_role", "unit", "observation_policy", "summary_grain", "prompt_support", "prompt_support_reading", "minute_occupancy_fraction", "minute_occupancy_reading", "n_sessions_with_data", "n_participants_with_data", "scientific_use"],
+                        n=36,
+                    ),
+                    tags=["matrix", "registry", "pipeline", "statistics"],
+                    evidence_score=ev["score"],
+                    evidence_label=ev["label"],
+                    gating_note=ev["note"],
+                    section="analyzed",
+                ),
+                self._html_spec(
+                    code="C07AC",
+                    stem="cohort_policy_gate_register",
+                    title="Scientific result gate register",
+                    summary="This register translates the Section 5 scientific policy into operational gates for Chapter 5: sample adequacy, preprocessing QC, endpoint support, modality validity, inferential eligibility, predictive generalization, and scenario sensitivity.",
+                    html_fragment=self._matrix_panel_html(
+                        "Scientific Result Gate Register",
+                        policy_gate_register,
+                        ["gate", "status", "threshold", "observed_value", "evidence_basis", "scientific_implication"],
+                        n=24,
+                    ),
+                    tags=["matrix", "policy", "qc", "pipeline"],
+                    evidence_score=ev["score"],
+                    evidence_label=ev["label"],
+                    gating_note=ev["note"],
+                    section="analyzed",
+                ),
+                self._html_spec(
+                    code="C07AD",
+                    stem="cohort_robustness_register",
+                    title="Robustness and sensitivity register",
+                    summary="This register condenses the main robustness checks for Chapter 5, including endpoint support stability, scenario sensitivity, multiplicity-controlled contrasts, model-fit stability, predictive variability, and the quarantine of partial-support endpoints.",
+                    html_fragment=self._matrix_panel_html(
+                        "Robustness And Sensitivity Register",
+                        robustness_register,
+                        ["gate", "status", "observed_value", "evidence_basis", "scientific_reading"],
+                        n=24,
+                    ),
+                    tags=["matrix", "robustness", "sensitivity", "statistics"],
+                    evidence_score=ev["score"],
+                    evidence_label=ev["label"],
+                    gating_note=ev["note"],
+                    section="analyzed",
+                ),
                 self._html_spec(
                     code="C07A",
                     stem="cohort_endpoint_support_grading",
@@ -3014,7 +4449,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
                     code="C07B",
                     stem="cohort_endpoint_support_grades",
                     title="Endpoint support grading summary",
-                    summary="This figure summarizes how completely each endpoint covers the available condition-by-phase grid before the cohort result layer is interpreted.",
+                    summary="This figure summarizes how many condition-phase cells are supported for each endpoint before the cohort result layer is interpreted. For questionnaire and control/context endpoints, this reflects supported event- or state-derived condition-phase cells rather than continuous timeline completeness.",
                     fig=self._fig_cohort_endpoint_support_grades(support_profile),
                     tags=["support", "statistics"],
                     evidence_score=ev["score"],
@@ -3034,15 +4469,83 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
                     gating_note=ev["note"],
                     section="analyzed",
                 ),
+                self._spec(
+                    code="C12AA",
+                    stem="cohort_derived_feature_landscape",
+                    title="Derived-feature support, variability, and condition-balance overview",
+                    summary="This figure surveys the derived feature layer to show which measures have the strongest aligned support, which supported features show the largest robust variation, how support is distributed across feature domains, and how support balance differs across questionnaire, wearable, and indoor streams by condition.",
+                    fig=self._fig_cohort_exploratory_landscape(
+                        c.get("exploratory_feature_summary", pd.DataFrame()),
+                        c.get("condition_support_summary", pd.DataFrame()),
+                        c.get("feature_registry", pd.DataFrame()),
+                    ),
+                    tags=["statistics", "coverage", "exploratory", "landscape"],
+                    evidence_score=ev["score"],
+                    evidence_label=ev["label"],
+                    gating_note=ev["note"],
+                    section="analyzed",
+                ),
+                self._spec(
+                    code="C12AB",
+                    stem="cohort_primary_endpoint_mean_atlas_questionnaire_environment",
+                    title="Primary endpoint mean atlas: questionnaire and environment",
+                    summary="This atlas summarizes cohort-level means for the questionnaire and environmental primary endpoints across protocol phases and conditions before contrast models are applied. It is a descriptive view of the higher-level comfort and context layer.",
+                    fig=self._fig_cohort_primary_endpoints_raw(
+                        c.get("cohort_primary_endpoints", pd.DataFrame()),
+                        metrics_override=[
+                            "thermal_comfort",
+                            "thermal_sensation",
+                            "indoor_air_velocity_mean_m_s",
+                            "empatica_eda_mean_uS",
+                        ],
+                    ),
+                    tags=["statistics", "endpoints", "atlas", "phase"],
+                    evidence_score=ev["score"],
+                    evidence_label=ev["label"],
+                    gating_note=ev["note"],
+                    section="analyzed",
+                ),
+                self._spec(
+                    code="C12ABA",
+                    stem="cohort_primary_endpoint_mean_atlas_physiology",
+                    title="Primary endpoint mean atlas: physiology",
+                    summary="This atlas summarizes cohort-level means for the physiological primary endpoints across protocol phases and conditions before contrast models are applied. It is a descriptive view of the retained physiology layer.",
+                    fig=self._fig_cohort_primary_endpoints_raw(
+                        c.get("cohort_primary_endpoints", pd.DataFrame()),
+                        metrics_override=[
+                            "empatica_temp_mean_C",
+                            "biopac_hr_mean_bpm",
+                            "biopac_eda_mean_uS",
+                            "biopac_temp_chest_mean_C",
+                        ],
+                    ),
+                    tags=["statistics", "endpoints", "atlas", "phase"],
+                    evidence_score=ev["score"],
+                    evidence_label=ev["label"],
+                    gating_note=ev["note"],
+                    section="analyzed",
+                ),
+                self._spec(
+                    code="C12AC",
+                    stem="cohort_primary_endpoint_standardized_atlas",
+                    title="Primary endpoint standardized atlas",
+                    summary="This heatmap standardizes the primary endpoint layer within each metric so cross-metric pattern structure can be compared without conflating units or scale ranges.",
+                    fig=self._fig_cohort_primary_endpoints(c.get("cohort_primary_endpoints", pd.DataFrame())),
+                    tags=["statistics", "endpoints", "atlas", "heatmap"],
+                    evidence_score=ev["score"],
+                    evidence_label=ev["label"],
+                    gating_note=ev["note"],
+                    section="analyzed",
+                ),
                 self._html_spec(
                     code="C12B",
                     stem="cohort_corrected_contrast_register",
                     title="Multiplicity-corrected contrast register",
-                    summary="This register lists the strongest paired condition contrasts after Benjamini-Hochberg correction. Confidence intervals are bootstrap intervals on the matched mean difference.",
+                    summary="This register lists the globally strongest eligible paired condition contrasts after Benjamini-Hochberg correction. It is intentionally rank-ordered by corrected significance and may therefore be dominated by one endpoint family when one family carries the smallest corrected p-values. Confidence intervals are bootstrap intervals on the matched mean difference. Use Table 5.7 to read breadth across endpoint families and Table 5.8 to read model-based fixed-effect evidence for the same primary endpoint layer. How to read it: this is the strongest-hit contrast list, so each row is a phase-specific paired condition comparison rather than a whole-model coefficient.",
                     html_fragment=self._matrix_panel_html(
                         "Corrected Condition Contrast Register",
                         self._cohort_top_contrast_register(c.get("condition_contrasts", pd.DataFrame())),
-                        ["metric", "protocol_phase", "comparison", "n_pairs", "mean_difference", "ci_low", "ci_high", "p_value", "p_value_fdr", "inference_label"],
+                        ["metric", "protocol_phase", "comparison", "primary_test", "n_pairs", "mean_difference", "ci_low", "ci_high", "primary_p_value", "p_value_fdr", "inference_label"],
                         n=24,
                     ),
                     tags=["statistics", "contrast", "phase"],
@@ -3052,14 +4555,31 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
                     section="analyzed",
                 ),
                 self._html_spec(
+                    code="C12BA",
+                    stem="cohort_balanced_contrast_register",
+                    title="Balanced multiplicity-corrected contrast register",
+                    summary="This companion register keeps the same Benjamini-Hochberg-corrected contrast layer but balances representation across endpoint families before filling remaining slots by corrected significance. It should be used to interpret the breadth of the contrast layer, whereas Table 5.6 should be read as the strongest-hit list. Confidence intervals are bootstrap intervals on the matched mean difference. Use Table 5.8 when you need model-based fixed-effect evidence instead of paired contrast evidence. How to read it: this is the breadth-aware contrast summary, so rows are still paired condition contrasts, but family balancing prevents one endpoint family from monopolizing the table.",
+                    html_fragment=self._matrix_panel_html(
+                        "Balanced Corrected Condition Contrast Register",
+                        self._cohort_balanced_contrast_register(c.get("condition_contrasts", pd.DataFrame())),
+                        ["contrast_family", "metric", "protocol_phase", "comparison", "primary_test", "n_pairs", "mean_difference", "ci_low", "ci_high", "primary_p_value", "p_value_fdr", "inference_label"],
+                        n=24,
+                    ),
+                    tags=["statistics", "contrast", "phase", "balanced_register"],
+                    evidence_score=ev["score"],
+                    evidence_label=ev["label"],
+                    gating_note=ev["note"],
+                    section="analyzed",
+                ),
+                self._html_spec(
                     code="C12C",
                     stem="cohort_mixed_effects_register",
                     title="Mixed-effects primary-endpoint register",
-                    summary="This register reports participant-level mixed-effects estimates for the primary endpoints, screening fixed effects by false-discovery-rate corrected p-values.",
+                    summary="This register reports participant-level mixed-effects fixed-effect estimates for the endpoint-policy primary set, screening terms by Benjamini-Hochberg-corrected p-values across the retained mixed-model term layer. Only interpretive fixed effects are shown here; variance and covariance parameters are excluded and fit warnings should be checked in Table 5.9. Reference levels are the bright condition (`BRI`), midday (`MID`), and fan-at-constant-speed phase (`FCS`). Use Tables 5.6 and 5.7 for paired contrast summaries and use this register when you need whole-model repeated-measures evidence. How to read it: each row is a model coefficient relative to those reference levels, so beta gives the direction and magnitude of the modeled shift for that term rather than a pairwise condition contrast.",
                     html_fragment=self._matrix_panel_html(
                         "Mixed-Effects Primary-Endpoint Register",
                         self._mixed_effects_register(c.get("mixed_effects_primary", pd.DataFrame())),
-                        ["metric", "term", "beta", "ci_low", "ci_high", "p_value", "p_value_fdr", "significant_fdr", "n_obs", "n_participants"],
+                        ["metric", "term", "term_reading", "beta", "ci_low", "ci_high", "p_value", "p_value_fdr", "significant_fdr", "n_obs", "n_participants"],
                         n=30,
                     ),
                     tags=["statistics", "mixed_model", "phase"],
@@ -3068,13 +4588,262 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
                     gating_note=ev["note"],
                     section="analyzed",
                 ),
+                self._html_spec(
+                    code="C12CA",
+                    stem="cohort_mixed_effects_diagnostics",
+                    title="Mixed-effects fit diagnostics",
+                    summary="This register shows which endpoint-policy primary metrics were retained, skipped, or fit with warnings in the mixed-effects layer, so model eligibility is explicit rather than inferred from terminal warnings. `Model specification` names the richest converged model that was retained for that metric, and warning summaries indicate boundary, singular-covariance, or Hessian issues that can weaken coefficient trust. How to read it: read `Status`, `Fit Converged`, and `Warnings` first to judge model reliability, then use `Retained Terms` and `Model Specification` to understand how much interpretable fixed-effect structure survived.",
+                    html_fragment=self._matrix_panel_html(
+                        "Mixed-Effects Fit Diagnostics",
+                        self._mixed_effects_diagnostics_register(c.get("mixed_effects_diagnostics", pd.DataFrame())),
+                        ["metric", "status", "model_spec", "n_obs", "n_participants", "n_terms_retained", "fit_converged", "warning_count", "warning_summary"],
+                        n=24,
+                    ),
+                    tags=["statistics", "mixed_model", "qc"],
+                    evidence_score=ev["score"],
+                    evidence_label=ev["label"],
+                    gating_note=ev["note"],
+                    section="analyzed",
+                ),
+                self._spec(
+                    code="C12CB",
+                    stem="cohort_modeling_overview",
+                    title="Statistical and advanced modeling overview",
+                    summary="This figure condenses the statistical evidence layer into two views: the top panel summarizes corrected contrast evidence across endpoint families, and the middle panel shows which endpoints retain phase, light, time, or interaction evidence in the mixed-effects layer. Use Table 5.6 for the strongest-hit contrast list, Table 5.7 for the breadth-aware contrast summary, Table 5.8 for endpoint-level mixed-effects coefficients, and Table 5.9 for fit warnings. How to read it: the top panel shows family-level contrast burden and breadth, and the middle panel shows endpoint-level mixed-model evidence structure.",
+                    fig=self._fig_cohort_modeling_overview(
+                        c.get("condition_contrasts", pd.DataFrame()),
+                        c.get("mixed_effects_primary", pd.DataFrame()),
+                        c.get("predictive_benchmarks", pd.DataFrame()),
+                    ),
+                    tags=["statistics", "mixed_model", "prediction", "overview"],
+                    evidence_score=ev["score"],
+                    evidence_label=ev["label"],
+                    gating_note=ev["note"],
+                    section="analyzed",
+                ),
+                self._spec(
+                    code="C12CC",
+                    stem="cohort_lag_response_register",
+                    title="Lag-response evidence register",
+                    summary="This register identifies the strongest support-screened lag for each pre-registered driver-response pair, while also showing the tested lag profile behind each retained result so delayed thermal and physiological response timing is explicit in the Chapter 5 evidence layer.",
+                    fig=self._fig_lag_response_register(
+                        c.get("lag_response_register", pd.DataFrame()),
+                        c.get("lag_response_profile", pd.DataFrame()),
+                    ),
+                    tags=["statistics", "lag", "temporal", "evidence"],
+                    evidence_score=ev["score"],
+                    evidence_label=ev["label"],
+                    gating_note=ev["note"],
+                    section="analyzed",
+                ),
+                self._html_spec(
+                    code="C12CD",
+                    stem="cohort_threshold_response_register",
+                    title="Threshold-response register",
+                    summary="This register reports estimated breakpoints for retained driver-response pairs using segmented fits at each pair's strongest lag, so Chapter 5 decisions can cite explicit threshold evidence rather than only quartile bands. Threshold values use the predictor unit shown in the `Unit` column. Simpler scientific interpretation: this table asks whether a response appears to change behavior around a specific driver level, and if so, where that possible breakpoint sits. How to read it: read `Evidence Grade`, `RSS Improvement`, and `Scientific Reading` together before treating a breakpoint as operationally meaningful.",
+                    html_fragment=self._matrix_panel_html(
+                        "Threshold-Response Register",
+                        self._threshold_response_register_display(c.get("threshold_response_register", pd.DataFrame())),
+                        ["predictor", "target", "threshold_unit", "threshold_value", "slope_below", "slope_above", "slope_change", "rss_improvement_fraction", "n_pairs", "n_sessions", "evidence_grade", "scientific_reading"],
+                        n=18,
+                    ),
+                    tags=["statistics", "threshold", "segmented", "lag"],
+                    evidence_score=ev["score"],
+                    evidence_label=ev["label"],
+                    gating_note=ev["note"],
+                    section="analyzed",
+                ),
+                self._html_spec(
+                    code="C12CE",
+                    stem="cohort_scientific_decision_register",
+                    title="Scientific decision register",
+                    summary="This final decision layer translates validated Chapter 5 findings into estimated breakpoints or operating bands, response lags, evidence grades, and control-facing scientific readings. Operating bands use the predictor unit shown in the `Unit` column. Simpler scientific interpretation: this table turns the modeled lag and breakpoint evidence into a practical statement about which driver range is more favorable and how quickly the outcome tends to respond. How to read it: use `Statistical Basis` for the evidential basis, `Practical Reading` for the size and direction of the observed shift, and `Control Recommendation` for the decision-facing interpretation.",
+                    html_fragment=self._matrix_panel_html(
+                        "Scientific Decision Register",
+                        self._scientific_decision_register_display(c.get("scientific_decision_register", pd.DataFrame())),
+                        ["claim_family", "predictor", "target", "threshold_unit", "recommended_operating_band", "response_lag_minutes", "evidence_grade", "supporting_streams", "statistical_basis", "practical_reading", "control_recommendation"],
+                        n=18,
+                    ),
+                    tags=["statistics", "decision", "lag", "control"],
+                    evidence_score=ev["score"],
+                    evidence_label=ev["label"],
+                    gating_note=ev["note"],
+                    section="analyzed",
+                ),
                 self._spec(
                     code="C12D",
                     stem="cohort_predictive_benchmarks",
-                    title="Participant-grouped predictive benchmarks",
-                    summary="This panel reports subject-independent benchmark performance for predicting illuminance level and time of day from the session endpoint feature set. These are grouped-by-participant validation results, not resubstitution scores.",
+                    title="Validation-aware predictive benchmarks",
+                    summary="This panel compares environment-only, physiology-only, and fused models for comfort-state prediction across participant, study-day, and condition holdout schemes, so multimodal gain and generalization risk remain explicit.",
                     fig=self._fig_predictive_benchmarks(c.get("predictive_benchmarks", pd.DataFrame())),
                     tags=["statistics", "prediction", "benchmark"],
+                    evidence_score=ev["score"],
+                    evidence_label=ev["label"],
+                    gating_note=ev["note"],
+                    section="analyzed",
+                ),
+                self._spec(
+                    code="C12E",
+                    stem="cohort_pattern_atlas",
+                    title="Derived pattern atlas",
+                    summary="This figure summarizes recurring within-session motifs in the derived endpoint layer, showing which phases dominate repeated response patterns and which session-level motifs are strongest across the cohort.",
+                    fig=self._fig_cohort_pattern_atlas(c.get("pattern_summary", pd.DataFrame()), c.get("phase_pattern_inventory", pd.DataFrame())),
+                    tags=["statistics", "patterns", "atlas", "phase"],
+                    evidence_score=ev["score"],
+                    evidence_label=ev["label"],
+                    gating_note=ev["note"],
+                    section="analyzed",
+                ),
+                self._spec(
+                    code="C12F",
+                    stem="cohort_participant_profile_atlas",
+                    title="Participant heterogeneity atlas",
+                    summary="This atlas shows participant-by-condition heterogeneity across the main subjective and physiological summary endpoints, making between-participant variation explicit before group summaries are generalized.",
+                    fig=self._fig_cohort_participant_profile_atlas(c.get("participant_profiles", pd.DataFrame())),
+                    tags=["statistics", "participants", "heterogeneity", "atlas"],
+                    evidence_score=ev["score"],
+                    evidence_label=ev["label"],
+                    gating_note=ev["note"],
+                    section="analyzed",
+                ),
+                self._html_spec(
+                    code="C07C",
+                    stem="cohort_modality_scenario_register",
+                    title="Modality scenario register",
+                    summary="This register defines the modality combinations used in the cohort report so audit views with all sources remain distinct from claim-supporting views restricted to scientifically valid streams.",
+                    html_fragment=self._matrix_panel_html(
+                        "Cohort Modality Scenario Register",
+                        scenario_register,
+                        ["scenario", "included_streams", "excluded_streams", "scientific_use"],
+                        n=8,
+                    ),
+                    tags=["matrix", "support", "qc", "scenario"],
+                    evidence_score=ev["score"],
+                    evidence_label=ev["label"],
+                    gating_note=ev["note"],
+                    section="frontmatter",
+                ),
+                self._html_spec(
+                    code="C07CA",
+                    stem="cohort_modality_claim_register",
+                    title="Modality manuscript-claim register",
+                    summary="This register states what each signal stream may support in the manuscript: primary claim, QC-qualified claim, audit-only use, or no claim.",
+                    html_fragment=self._matrix_panel_html(
+                        "Cohort Modality Manuscript-Claim Register",
+                        modality_claim_register,
+                        ["signal_stream", "construct", "adequacy_status", "recommended_role", "manuscript_use", "manuscript_claim"],
+                        n=16,
+                    ),
+                    tags=["matrix", "qc", "support", "scenario", "manuscript"],
+                    evidence_score=ev["score"],
+                    evidence_label=ev["label"],
+                    gating_note=ev["note"],
+                    section="frontmatter",
+                ),
+                self._html_spec(
+                    code="C07CB",
+                    stem="cohort_endpoint_claim_register",
+                    title="Endpoint manuscript-claim register",
+                    summary="This register translates endpoint support grades and modality gates into manuscript-use categories, separating claim-supporting endpoints from audit-only or descriptive endpoints.",
+                    html_fragment=self._matrix_panel_html(
+                        "Cohort Endpoint Manuscript-Claim Register",
+                        endpoint_claim_register,
+                        ["endpoint", "support_grade", "support_basis", "modality_gate", "claim_status", "claim_note"],
+                        n=24,
+                    ),
+                    tags=["matrix", "support", "scenario", "manuscript"],
+                    evidence_score=ev["score"],
+                    evidence_label=ev["label"],
+                    gating_note=ev["note"],
+                    section="frontmatter",
+                ),
+                self._html_spec(
+                    code="C07CC",
+                    stem="cohort_device_stream_inventory",
+                    title="Empatica and BIOPAC stream inventory",
+                    summary="This register lists all major Empatica and BIOPAC streams in the cohort export, showing whether each stream is present, audited, cross-device comparable, used as a direct analytic feature or only as an audited/reported stream, and linked to an explicit endpoint-policy role.",
+                    html_fragment=self._matrix_panel_html(
+                        "Cohort Device Stream Inventory",
+                        device_stream_inventory,
+                        ["stream_label", "device", "construct", "comparison_class", "present_in_cohort_table", "signal_audited", "cross_device_comparable", "analytic_feature", "stream_usage", "endpoint_policy_role", "recommended_role", "adequacy_status"],
+                        n=24,
+                    ),
+                    tags=["matrix", "inventory", "qc", "scenario", "manuscript"],
+                    evidence_score=ev["score"],
+                    evidence_label=ev["label"],
+                    gating_note=ev["note"],
+                    section="frontmatter",
+                ),
+                self._html_spec(
+                    code="C07CD",
+                    stem="cohort_analysis_pathway_register",
+                    title="Endpoint analysis pathway register",
+                    summary="This register shows how endpoints move from available cohort tables into support scoring, valid-only eligibility, and endpoint-policy interpretation. It makes explicit what is primary, QC-qualified, secondary, audit-only, or outside the endpoint policy.",
+                    html_fragment=self._matrix_panel_html(
+                        "Cohort Endpoint Analysis Pathway Register",
+                        analysis_pathway_register,
+                        ["endpoint", "metric", "source_streams", "in_cohort_table", "support_grade", "support_basis", "endpoint_policy_role", "pathway_status"],
+                        n=36,
+                    ),
+                    tags=["matrix", "inventory", "support", "scenario", "manuscript"],
+                    evidence_score=ev["score"],
+                    evidence_label=ev["label"],
+                    gating_note=ev["note"],
+                    section="frontmatter",
+                ),
+                self._spec(
+                    code="C07D",
+                    stem="cohort_hr_scenario_comparison",
+                    title="Heart-rate scenario comparison",
+                    summary="Heart-rate summaries are shown under both all-source and valid-only scenarios so the effect of excluding Empatica heart rate from claim-supporting interpretation is visible rather than implicit.",
+                    fig=self._fig_cohort_hr_scenarios(c.get("cohort_phase_summary", pd.DataFrame()), c.get("signal_audit_summary", pd.DataFrame())),
+                    tags=["heart_rate", "scenario", "qc", "support"],
+                    evidence_score=ev["score"],
+                    evidence_label=ev["label"],
+                    gating_note=ev["note"],
+                    section="analyzed",
+                ),
+                self._html_spec(
+                    code="C08AA",
+                    stem="cohort_all_source_response_matrix",
+                    title="All-source support-screened condition-phase median matrix",
+                    summary="This audit matrix retains every support-screened endpoint, including streams that remain descriptive, subset-only, or device-limited. It should be used to inspect how modality inclusion changes the cohort picture, not as the default claim-supporting figure.",
+                    html_fragment=self._matrix_panel_html(
+                        "All-Source Condition-Phase Median Matrix",
+                        all_source_response_matrix,
+                        ["row_label", "support_basis", "FCS", "SR", "FFC", "SS", "OC", "n_sessions", "total_valid_phase_summaries", "condition_phase_support"],
+                        n=36,
+                    ),
+                    tags=["matrix", "phase", "statistics", "scenario"],
+                    evidence_score=ev["score"],
+                    evidence_label=ev["label"],
+                    gating_note=ev["note"],
+                    section="analyzed",
+                ),
+                self._html_spec(
+                    code="C08AB",
+                    stem="cohort_valid_only_response_matrix",
+                    title="Valid-only support-screened condition-phase median matrix",
+                    summary="This claim-supporting matrix excludes streams that fail the modality-validity screen. It is the defensible cohort view when only primary and primary-with-QC modalities are retained.",
+                    html_fragment=self._matrix_panel_html(
+                        "Valid-Only Condition-Phase Median Matrix",
+                        valid_only_response_matrix,
+                        ["row_label", "support_basis", "FCS", "SR", "FFC", "SS", "OC", "n_sessions", "total_valid_phase_summaries", "condition_phase_support"],
+                        n=36,
+                    ),
+                    tags=["matrix", "phase", "statistics", "scenario"],
+                    evidence_score=ev["score"],
+                    evidence_label=ev["label"],
+                    gating_note=ev["note"],
+                    section="analyzed",
+                ),
+                self._spec(
+                    code="C12AE",
+                    stem="cohort_contrast_overview",
+                    title="Condition-contrast overview",
+                    summary="This figure summarizes matched condition differences across the main endpoint families, separating condition contrasts that meet the paired inferential screen from descriptive-only contrasts.",
+                    fig=self._fig_cohort_contrasts(c.get("condition_contrasts", pd.DataFrame()), ev),
+                    tags=["statistics", "contrast", "phase", "overview"],
                     evidence_score=ev["score"],
                     evidence_label=ev["label"],
                     gating_note=ev["note"],
@@ -3198,6 +4967,64 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
         )
         appendix = [
             self._html_spec(
+                code="C11AA",
+                stem="cohort_all_source_relationship_matrix",
+                title="All-source relationship matrix",
+                summary="This audit matrix keeps relationships from every retained all-source endpoint, including device-limited or subset-only modalities. It is intended to show how relationship structure changes when weaker streams are included.",
+                html_fragment=self._matrix_panel_html(
+                    "Cohort All-Source Relationship Matrix",
+                    all_source_relationship_matrix,
+                    ["source", "target", "spearman_r", "paired_n", "min_required_n", "qualified_conditions", "same_sign_fraction", "relationship_status", "condition_support_status"],
+                    n=64,
+                ),
+                tags=["matrix", "relationships", "statistics", "scenario"],
+                evidence_score=ev["score"],
+                evidence_label=ev["label"],
+                gating_note=ev["note"],
+                section="interpretive",
+            ),
+            self._spec(
+                code="C11AB",
+                stem="cohort_all_source_relationship_heatmap",
+                title="All-source relationship heatmap",
+                summary="This audit heatmap visualizes the all-source relationship matrix and may include associations carried by subset-only or device-limited streams.",
+                fig=self._fig_cohort_relationship_heatmap(all_source_relationship_matrix),
+                tags=["heatmap", "relationships", "statistics", "scenario"],
+                evidence_score=ev["score"],
+                evidence_label=ev["label"],
+                gating_note=ev["note"],
+                section="interpretive",
+            ),
+            self._html_spec(
+                code="C11AC",
+                stem="cohort_valid_only_relationship_matrix",
+                title="Valid-only relationship matrix",
+                summary="This claim-supporting matrix retains only relationships among endpoints supported by scientifically valid modalities, excluding subset-only streams such as Empatica heart rate in the current release.",
+                html_fragment=self._matrix_panel_html(
+                    "Cohort Valid-Only Relationship Matrix",
+                    valid_only_relationship_matrix,
+                    ["source", "target", "spearman_r", "paired_n", "min_required_n", "qualified_conditions", "same_sign_fraction", "relationship_status", "condition_support_status"],
+                    n=64,
+                ),
+                tags=["matrix", "relationships", "statistics", "scenario"],
+                evidence_score=ev["score"],
+                evidence_label=ev["label"],
+                gating_note=ev["note"],
+                section="interpretive",
+            ),
+            self._spec(
+                code="C11AD",
+                stem="cohort_valid_only_relationship_heatmap",
+                title="Valid-only relationship heatmap",
+                summary="This claim-supporting heatmap visualizes only relationships that remain after restricting the cohort result layer to scientifically valid modalities.",
+                fig=self._fig_cohort_relationship_heatmap(valid_only_relationship_matrix),
+                tags=["heatmap", "relationships", "statistics", "scenario"],
+                evidence_score=ev["score"],
+                evidence_label=ev["label"],
+                gating_note=ev["note"],
+                section="interpretive",
+            ),
+            self._html_spec(
                 code="C11A",
                 stem="cohort_relationship_matrix",
                 title=f"{result_prefix} relationship matrix",
@@ -3227,6 +5054,30 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
                 section="interpretive",
             ),
             self._spec(
+                code="C11AE",
+                stem="cohort_all_source_targeted_relationships",
+                title="All-source targeted relationships with thermal comfort",
+                summary="These scatter panels keep the full all-source endpoint set so the audit view can show whether subset-only or device-limited modalities materially alter the apparent comfort relationships.",
+                fig=self._fig_cohort_targeted_relationships(c.get("cohort_phase_summary", pd.DataFrame()), all_source_support),
+                tags=["relationships", "statistics", "comfort", "scenario"],
+                evidence_score=ev["score"],
+                evidence_label=ev["label"],
+                gating_note=ev["note"],
+                section="interpretive",
+            ),
+            self._spec(
+                code="C11AF",
+                stem="cohort_valid_only_targeted_relationships",
+                title="Valid-only targeted relationships with thermal comfort",
+                summary="These scatter panels restrict the relationship view to endpoints supported by scientifically valid modalities and should be preferred when the figure is used to support manuscript claims.",
+                fig=self._fig_cohort_targeted_relationships(c.get("cohort_phase_summary", pd.DataFrame()), valid_only_support),
+                tags=["relationships", "statistics", "comfort", "scenario"],
+                evidence_score=ev["score"],
+                evidence_label=ev["label"],
+                gating_note=ev["note"],
+                section="interpretive",
+            ),
+            self._spec(
                 code="C11C",
                 stem="cohort_targeted_relationships",
                 title="Targeted relationships with thermal comfort",
@@ -3241,8 +5092,8 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             self._spec(
                 code="C05",
                 stem="cohort_agreement",
-                title="How closely the devices agree across sessions",
-                summary="This view shows how closely paired devices align across sessions and highlights where comparisons are supported by enough overlapping data.",
+                title="How closely directly comparable device pairs agree across sessions",
+                summary="This view is limited to the directly comparable Empatica/BIOPAC constructs and shows where paired devices align across sessions with enough overlapping data.",
                 fig=self._fig_cohort_agreement(c["sensor_agreement"]),
                 tags=["agreement", "heart_rate", "eda", "temperature"],
                 evidence_score=ev["score"],
@@ -3253,8 +5104,8 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             self._spec(
                 code="C10",
                 stem="cohort_agreement_summary",
-                title="Agreement summary by modality",
-                summary="This summary compares overlap, correlation, and error across the three validation modalities and makes the quality ranking explicit.",
+                title="Agreement summary for directly comparable modalities",
+                summary="This summary compares overlap, correlation, and error across the directly comparable cross-device constructs only; it is not a summary of the full modality inventory.",
                 fig=self._fig_cohort_agreement_summary(c.get("agreement_summary", pd.DataFrame())),
                 tags=["appendix", "agreement", "statistics"],
                 evidence_score=ev["score"],
@@ -3267,21 +5118,40 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
 
     def _build_cohort_condition_trace_specs(self, minute: pd.DataFrame, ev: dict) -> list[dict]:
         metric_specs = [
-            ("C06A", "thermal_comfort", "Condition-stratified comfort distributions", ["appendix", "phase", "comfort"]),
-            ("C06B", "empatica_hr_mean_bpm", "Condition-stratified heart-rate trajectories", ["appendix", "phase", "heart_rate"]),
-            ("C06C", "biopac_temp_chest_mean_C", "Condition-stratified chest-temperature trajectories", ["appendix", "phase", "temperature"]),
-            ("C06D", "indoor_air_velocity_mean_m_s", "Condition-stratified air-velocity trajectories", ["appendix", "phase", "environment"]),
+            ("C06A", "thermal_comfort", "Condition-stratified raw Thermal Comfort observations", ["appendix", "phase", "comfort", "raw"], True),
+            ("C06B", "thermal_sensation", self._series_title("thermal_sensation", scope="Condition-stratified", kind="distributions"), ["appendix", "phase", "comfort", "summary"], False),
+            ("C06C", "thermal_comfort", self._series_title("thermal_comfort", scope="Condition-stratified", kind="distributions"), ["appendix", "phase", "comfort", "summary"], False),
+            ("C06D", "thermal_preference", self._series_title("thermal_preference", scope="Condition-stratified", kind="distributions"), ["appendix", "phase", "comfort", "summary"], False),
+            ("C06E", "thermal_pleasure", self._series_title("thermal_pleasure", scope="Condition-stratified", kind="distributions"), ["appendix", "phase", "comfort", "summary"], False),
+            ("C06F", "visual_sensation", self._series_title("visual_sensation", scope="Condition-comparison", kind="distributions"), ["appendix", "phase", "comfort", "summary"], False),
+            ("C06G", "color_sensation", self._series_title("color_sensation", scope="Condition-comparison", kind="distributions"), ["appendix", "phase", "comfort", "summary"], False),
+            ("C06H", "room_comfort", self._series_title("room_comfort", scope="Condition-comparison", kind="distributions"), ["appendix", "phase", "comfort", "summary"], False),
+            ("C06I", "visual_comfort", self._series_title("visual_comfort", scope="Condition-comparison", kind="distributions"), ["appendix", "phase", "comfort", "summary"], False),
+            ("C06J", "sound_comfort_dbA", self._series_title("sound_comfort_dbA", scope="Condition-comparison", kind="distributions"), ["appendix", "phase", "comfort", "summary"], False),
+            ("C06K", "air_quality_comfort", self._series_title("air_quality_comfort", scope="Condition-comparison", kind="distributions"), ["appendix", "phase", "comfort", "summary"], False),
+            ("C06L", "empatica_hr_mean_bpm", self._series_title("empatica_hr_mean_bpm", scope="Condition-stratified", kind="trajectories"), ["appendix", "phase", "heart_rate"], False),
+            ("C06M", "biopac_temp_chest_mean_C", self._series_title("biopac_temp_chest_mean_C", scope="Condition-stratified", kind="trajectories"), ["appendix", "phase", "temperature"], False),
+            ("C06N", "indoor_air_velocity_mean_m_s", self._series_title("indoor_air_velocity_mean_m_s", scope="Condition-stratified", kind="trajectories"), ["appendix", "phase", "environment"], False),
+            ("C06O", "outdoor_air_temp_C", self._series_title("outdoor_air_temp_C", scope="Condition-stratified", kind="trajectories"), ["appendix", "phase", "environment"], False),
+            ("C06P", "outdoor_wind_speed_m_s", self._series_title("outdoor_wind_speed_m_s", scope="Condition-stratified", kind="trajectories"), ["appendix", "phase", "environment"], False),
+            ("C06Q", "outdoor_relative_humidity_percent", self._series_title("outdoor_relative_humidity_percent", scope="Condition-stratified", kind="trajectories"), ["appendix", "phase", "environment"], False),
+            ("C06R", "outdoor_solar_radiation_W_m2", self._series_title("outdoor_solar_radiation_W_m2", scope="Condition-stratified", kind="trajectories"), ["appendix", "phase", "environment"], False),
         ]
         specs: list[dict] = []
-        for code, metric, title, tags in metric_specs:
-            fig = self._fig_cohort_condition_trace(minute, metric)
+        for code, metric, title, tags, use_raw_sparse in metric_specs:
+            fig = self._fig_sparse_phase_distribution(minute, metric) if use_raw_sparse else self._fig_cohort_condition_trace(minute, metric)
+            stem = f"cohort_condition_trace_{metric}_raw" if use_raw_sparse else f"cohort_condition_trace_{metric}"
             specs.append(
                 self._spec(
                     code=code,
-                    stem=f"cohort_condition_trace_{metric}",
+                    stem=stem,
                     title=title,
                     summary=(
-                        "Questionnaire endpoints are shown as phase-wise condition distributions with raw observation points, because they are discrete event-based responses rather than continuous trajectories."
+                        (
+                            "This condition-stratified raw view keeps the questionnaire-event observations visible by condition and phase, so sparse support and uneven event density remain auditable before reading the summarized condition pattern panel that follows."
+                            if use_raw_sparse
+                            else self._cohort_questionnaire_caption(metric, aggregated=True)
+                        )
                         if self._is_sparse_observation_channel(metric)
                         else "Condition trajectories are shown as standalone plots so each modality can be read without subplot compression or cross-axis crowding."
                     ),
@@ -3290,33 +5160,48 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
                     evidence_score=ev["score"],
                     evidence_label=ev["label"],
                     gating_note=ev["note"],
-                    section="raw",
+                    section=self._cohort_metric_section(metric),
                 )
             )
         return specs
 
     def _build_cohort_burst_specs(self, minute: pd.DataFrame, ev: dict) -> list[dict]:
         channel_specs = [
-            ("C04C", "empatica_hr_mean_bpm", "#b91c1c", "Cohort Empatica HR bursts", ["heart_rate", "exploratory"]),
-            ("C04D", "empatica_eda_mean_uS", "#1d4ed8", "Cohort Empatica EDA bursts", ["eda", "exploratory"]),
-            ("C04E", "empatica_temp_mean_C", "#ea580c", "Cohort Empatica temperature bursts", ["temperature", "exploratory"]),
-            ("C04F", "biopac_hr_mean_bpm", "#111827", "Cohort BIOPAC HR bursts", ["heart_rate", "exploratory"]),
-            ("C04G", "biopac_eda_mean_uS", "#2563eb", "Cohort BIOPAC EDA bursts", ["eda", "exploratory"]),
-            ("C04H", "biopac_temp_chest_mean_C", "#ea580c", "Cohort chest-temperature bursts", ["temperature", "exploratory"]),
-            ("C04I", "biopac_bloodflow_mean_bpu", "#7c3aed", "Cohort blood-flow bursts", ["bloodflow", "exploratory"]),
-            ("C04J", "indoor_air_temp_mean_C", "#ea580c", "Cohort indoor-air-temperature bursts", ["environment", "exploratory"]),
-            ("C04K", "indoor_air_velocity_mean_m_s", "#0f766e", "Cohort air-velocity bursts", ["environment", "exploratory"]),
-            ("C04L", "indoor_relative_humidity_percent", "#2563eb", "Cohort indoor-relative-humidity bursts", ["environment", "exploratory"]),
-            ("C04M", "fan_control_au", "#111827", "Cohort fan-control bursts", ["fan", "exploratory"]),
-            ("C04N", "thermal_sensation", "#b91c1c", "Cohort thermal-sensation observations", ["comfort", "exploratory"]),
-            ("C04O", "thermal_comfort", "#0f172a", "Cohort thermal-comfort observations", ["comfort", "exploratory"]),
-            ("C04P", "thermal_preference", "#2563eb", "Cohort thermal-preference observations", ["comfort", "exploratory"]),
-            ("C04Q", "room_comfort", "#7c3aed", "Cohort room-comfort observations", ["comfort", "exploratory"]),
-            ("C04R", "fan_current_A", "#111827", "Cohort fan-current bursts", ["fan", "exploratory"]),
-            ("C04S", "fan_control_secondary_au", "#7c3aed", "Cohort secondary-fan-control bursts", ["fan", "exploratory"]),
-            ("C04T", "thermal_pleasure", "#ea580c", "Cohort thermal-pleasure observations", ["comfort", "exploratory"]),
-            ("C04U", "visual_comfort", "#0f766e", "Cohort visual-comfort observations", ["comfort", "exploratory"]),
-            ("C04V", "air_quality_comfort", "#2563eb", "Cohort air-quality-comfort observations", ["comfort", "exploratory"]),
+            ("C04B", "empatica_bvp_mean", "#7c3aed", self._series_title("empatica_bvp_mean", scope="Cohort", kind="bursts"), ["bvp", "exploratory"]),
+            ("C04C", "empatica_hr_mean_bpm", "#b91c1c", self._series_title("empatica_hr_mean_bpm", scope="Cohort", kind="bursts"), ["heart_rate", "exploratory"]),
+            ("C04D", "empatica_eda_mean_uS", "#1d4ed8", self._series_title("empatica_eda_mean_uS", scope="Cohort", kind="bursts"), ["eda", "exploratory"]),
+            ("C04E", "empatica_temp_mean_C", "#ea580c", self._series_title("empatica_temp_mean_C", scope="Cohort", kind="bursts"), ["temperature", "exploratory"]),
+            ("C04W", "empatica_acc_mean_g", "#b91c1c", self._series_title("empatica_acc_mean_g", scope="Cohort", kind="bursts"), ["motion", "exploratory"]),
+            ("C04X", "empatica_enmo_mean_g", "#2563eb", self._series_title("empatica_enmo_mean_g", scope="Cohort", kind="bursts"), ["motion", "exploratory"]),
+            ("C04Y", "empatica_steps", "#0f766e", self._series_title("empatica_steps", scope="Cohort", kind="bursts"), ["activity", "exploratory"]),
+            ("C04F", "biopac_hr_mean_bpm", "#111827", self._series_title("biopac_hr_mean_bpm", scope="Cohort", kind="bursts"), ["heart_rate", "exploratory"]),
+            ("C04G", "biopac_eda_mean_uS", "#2563eb", self._series_title("biopac_eda_mean_uS", scope="Cohort", kind="bursts"), ["eda", "exploratory"]),
+            ("C04H", "biopac_temp_chest_mean_C", "#ea580c", self._series_title("biopac_temp_chest_mean_C", scope="Cohort", kind="bursts"), ["temperature", "exploratory"]),
+            ("C04Z", "biopac_temp_thigh_mean_C", "#f59e0b", self._series_title("biopac_temp_thigh_mean_C", scope="Cohort", kind="bursts"), ["temperature", "exploratory"]),
+            ("C04ZA", "biopac_temp_arm_mean_C", "#dc2626", self._series_title("biopac_temp_arm_mean_C", scope="Cohort", kind="bursts"), ["temperature", "exploratory"]),
+            ("C04ZB", "biopac_temp_tibia_mean_C", "#7c3aed", self._series_title("biopac_temp_tibia_mean_C", scope="Cohort", kind="bursts"), ["temperature", "exploratory"]),
+            ("C04I", "biopac_bloodflow_mean_bpu", "#7c3aed", self._series_title("biopac_bloodflow_mean_bpu", scope="Cohort", kind="bursts"), ["bloodflow", "exploratory"]),
+            ("C04ZC", "biopac_backscatter_mean_percent", "#64748b", self._series_title("biopac_backscatter_mean_percent", scope="Cohort", kind="bursts"), ["optical", "exploratory"]),
+            ("C04J", "indoor_air_temp_mean_C", "#ea580c", self._series_title("indoor_air_temp_mean_C", scope="Cohort", kind="bursts"), ["environment", "exploratory"]),
+            ("C04K", "indoor_air_velocity_mean_m_s", "#0f766e", self._series_title("indoor_air_velocity_mean_m_s", scope="Cohort", kind="bursts"), ["environment", "exploratory"]),
+            ("C04L", "indoor_relative_humidity_percent", "#2563eb", self._series_title("indoor_relative_humidity_percent", scope="Cohort", kind="bursts"), ["environment", "exploratory"]),
+            ("C04LD", "outdoor_air_temp_C", "#ea580c", self._series_title("outdoor_air_temp_C", scope="Cohort", kind="bursts"), ["environment", "exploratory"]),
+            ("C04LE", "outdoor_relative_humidity_percent", "#2563eb", self._series_title("outdoor_relative_humidity_percent", scope="Cohort", kind="bursts"), ["environment", "exploratory"]),
+            ("C04LF", "outdoor_wind_speed_m_s", "#0f766e", self._series_title("outdoor_wind_speed_m_s", scope="Cohort", kind="bursts"), ["environment", "exploratory"]),
+            ("C04LG", "outdoor_solar_radiation_W_m2", "#f59e0b", self._series_title("outdoor_solar_radiation_W_m2", scope="Cohort", kind="bursts"), ["environment", "exploratory"]),
+            ("C04M", "fan_control_au", "#111827", self._series_title("fan_control_au", scope="Cohort", kind="bursts"), ["fan", "exploratory"]),
+            ("C04R", "fan_current_A", "#111827", self._series_title("fan_current_A", scope="Cohort", kind="bursts"), ["fan", "exploratory"]),
+            ("C04S", "fan_control_secondary_au", "#7c3aed", self._series_title("fan_control_secondary_au", scope="Cohort", kind="bursts"), ["fan", "exploratory"]),
+            ("C04N", "thermal_sensation", "#b91c1c", self._series_title("thermal_sensation", scope="Cohort", kind="observations"), ["comfort", "exploratory"]),
+            ("C04O", "thermal_comfort", "#0f172a", self._series_title("thermal_comfort", scope="Cohort", kind="observations"), ["comfort", "exploratory"]),
+            ("C04P", "thermal_preference", "#2563eb", self._series_title("thermal_preference", scope="Cohort", kind="observations"), ["comfort", "exploratory"]),
+            ("C04PA", "visual_sensation", "#0f766e", self._series_title("visual_sensation", scope="Cohort", kind="observations"), ["comfort", "exploratory"]),
+            ("C04PB", "color_sensation", "#b45309", self._series_title("color_sensation", scope="Cohort", kind="observations"), ["comfort", "exploratory"]),
+            ("C04Q", "room_comfort", "#7c3aed", self._series_title("room_comfort", scope="Cohort", kind="observations"), ["comfort", "exploratory"]),
+            ("C04T", "thermal_pleasure", "#ea580c", self._series_title("thermal_pleasure", scope="Cohort", kind="observations"), ["comfort", "exploratory"]),
+            ("C04U", "visual_comfort", "#0f766e", self._series_title("visual_comfort", scope="Cohort", kind="observations"), ["comfort", "exploratory"]),
+            ("C04UA", "sound_comfort_dbA", "#475569", self._series_title("sound_comfort_dbA", scope="Cohort", kind="observations"), ["comfort", "exploratory"]),
+            ("C04V", "air_quality_comfort", "#2563eb", self._series_title("air_quality_comfort", scope="Cohort", kind="observations"), ["comfort", "exploratory"]),
         ]
         specs: list[dict] = []
         for code, column, color, title, tags in channel_specs:
@@ -3326,13 +5211,21 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
                     code=code,
                     stem=f"cohort_{column}_bursts",
                     title=title,
-                    summary="Each cohort burst figure is dedicated to a single signal so modality-specific support timing and condition-stratified signal shape remain interpretable.",
+                    summary=(
+                        "This cohort figure shows a minute-level control state over the shared session timeline; step-like changes indicate control adjustments at particular time points rather than a continuous physiological waveform."
+                        if column in {"fan_control_au", "fan_control_secondary_au", "fan_current_A"}
+                        else (
+                            self._cohort_questionnaire_caption(column)
+                            if self._is_sparse_observation_channel(column)
+                            else "Each cohort figure is dedicated to a single audited or recorded signal so modality-specific support timing, condition balance, and signal shape remain interpretable before endpoint reduction."
+                        )
+                    ),
                     fig=fig,
                     tags=tags + ["phase"],
                     evidence_score=ev["score"],
                     evidence_label=ev["label"],
                     gating_note=ev["note"],
-                    section="raw",
+                    section=self._cohort_metric_section(column),
                 )
             )
         return specs
@@ -3677,7 +5570,11 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
                     code=code,
                     stem=f"{session_id}_{column}_raw",
                     title=title,
-                    summary="Each modality is shown in its own panel with a renderer matched to its data structure, so sparse questionnaire observations are not misrepresented as continuous signals.",
+                    summary=(
+                        "This panel shows a minute-level control state over the session timeline; step-like changes indicate control adjustments at particular time points rather than a continuous physiological waveform."
+                        if column in {"fan_current_A", "fan_control_au", "fan_control_secondary_au"}
+                        else "Each modality is shown in its own panel with a renderer matched to its data structure, so sparse questionnaire observations are not misrepresented as continuous signals."
+                    ),
                     fig=fig,
                     tags=tags + ["phase"],
                     evidence_score=ev["score"],
@@ -3735,7 +5632,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             for i in range(len(pivot.index)):
                 for j in range(len(pivot.columns)):
                     if pivot.values[i, j] > 0:
-                        phase_ax.text(j, i, int(pivot.values[i, j]), ha="center", va="center", fontsize=8, color="#172033")
+                        phase_ax.text(j, i, int(pivot.values[i, j]), ha="center", va="center", fontsize=10, color="#172033")
             plt.colorbar(im, ax=phase_ax, shrink=0.75, label="Minutes")
         else:
             phase_ax.axis("off")
@@ -3754,7 +5651,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
         ymax = max(overlap_values + [self.config.runtime.min_sensor_overlap_minutes, 1])
         overlap_ax.set_ylim(0, ymax * 1.18)
         for bar, value in zip(bars, overlap_values):
-            overlap_ax.text(bar.get_x() + bar.get_width() / 2.0, value + ymax * 0.03, f"{int(value)}", ha="center", va="bottom", fontsize=9, color="#172033")
+            overlap_ax.text(bar.get_x() + bar.get_width() / 2.0, value + ymax * 0.03, f"{int(value)}", ha="center", va="bottom", fontsize=11, color="#172033")
         fig.tight_layout(rect=(0, 0, 1, 0.965))
         return fig
 
@@ -3822,14 +5719,14 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
                 im = axes[2].imshow(pivot.values, aspect="equal", cmap="Blues", vmin=0, vmax=1)
                 axes[2].grid(False)
                 axes[2].set_xticks(range(len(pivot.columns)))
-                axes[2].set_xticklabels([PHASE_ABBR.get(x, x[:3].upper()) for x in pivot.columns], fontsize=8)
+                axes[2].set_xticklabels([PHASE_ABBR.get(x, x[:3].upper()) for x in pivot.columns], fontsize=10)
                 axes[2].set_yticks(range(len(pivot.index)))
                 axes[2].set_yticklabels(list(pivot.index))
                 for i in range(pivot.shape[0]):
                     for j in range(pivot.shape[1]):
                         value = float(pivot.iloc[i, j])
                         if value > 0:
-                            axes[2].text(j, i, f"{value:.0%}", ha="center", va="center", fontsize=8, color="#172033")
+                            axes[2].text(j, i, f"{value:.0%}", ha="center", va="center", fontsize=10, color="#172033")
                 plt.colorbar(im, ax=axes[2], shrink=0.82, label="Coverage")
             else:
                 axes[2].axis("off")
@@ -3867,7 +5764,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
                 continue
             for idx, row in enumerate(data.itertuples()):
                 ax.barh(idx, row.end_minute - row.start_minute + 1, left=row.start_minute, color=row.color, alpha=0.85)
-                ax.text(row.end_minute + 1.5, idx, f"{row.support_fraction:.0%}", va="center", fontsize=8, color="#475569")
+                ax.text(row.end_minute + 1.5, idx, f"{row.support_fraction:.0%}", va="center", fontsize=10, color="#475569")
             ax.set_yticks(range(len(data)))
             ax.set_yticklabels(list(data["segment_label"]))
             ax.set_xlabel("Timeline minute")
@@ -3922,7 +5819,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             cons_ax.barh(labels, vals, color="#2563eb")
             cons_ax.set_xlim(0, 1)
             for idx, row in enumerate(consistency_rows):
-                cons_ax.text(min(row[1] + 0.02, 0.98), idx, f"{PHASE_ABBR.get(row[3], row[3][:3].upper())} | {row[4]} | n={row[2]}", va="center", fontsize=8, color="#172033")
+                cons_ax.text(min(row[1] + 0.02, 0.98), idx, f"{PHASE_ABBR.get(row[3], row[3][:3].upper())} | {row[4]} | n={row[2]}", va="center", fontsize=10, color="#172033")
         else:
             cons_ax.axis("off")
         fig.tight_layout(rect=(0, 0, 1, 0.96))
@@ -4017,7 +5914,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             self._apply_discrete_y_axis_matplotlib(ax, block_deltas["delta"], metric)
             consistency = self._phase_repeat_consistency(phase, metric)
             if consistency["dominant_phase"] is not None and consistency["n_blocks"] >= BLOCK_PHASE_NARRATIVE_THRESHOLD:
-                ax.text(0.0, 1.02, f"dominant repeat: {PHASE_ABBR.get(consistency['dominant_phase'], consistency['dominant_phase'][:3].upper())} {consistency['dominant_direction']} | consistency={consistency['consistency']:.2f}", transform=ax.transAxes, ha="left", va="bottom", fontsize=8, color="#64748b")
+                ax.text(0.0, 1.02, f"dominant repeat: {PHASE_ABBR.get(consistency['dominant_phase'], consistency['dominant_phase'][:3].upper())} {consistency['dominant_direction']} | consistency={consistency['consistency']:.2f}", transform=ax.transAxes, ha="left", va="bottom", fontsize=10, color="#64748b")
             note = self._baseline_note(baseline_info)
             if note and note not in baseline_notes:
                 baseline_notes.append(note)
@@ -4138,13 +6035,13 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
         ax.imshow(mat, aspect="auto", cmap=cmap, interpolation="nearest", vmin=0, vmax=1)
         ax.grid(False)
         ax.set_yticks(range(len(mapping)))
-        ax.set_yticklabels(ylabels, fontsize=9)
+        ax.set_yticklabels(ylabels, fontsize=11)
         tick_count = min(8, len(comparison_minute))
         xticks = np.linspace(0, len(comparison_minute) - 1, tick_count, dtype=int) if tick_count > 1 else np.array([0])
         ax.set_xticks(xticks)
         minute_tick_values = to_numeric(comparison_minute.iloc[xticks]["minute_index"]).fillna(0).astype(int).tolist()
-        ax.set_xticklabels([str(x) for x in minute_tick_values], fontsize=9)
-        ax.set_xlabel("Timeline minute")
+        ax.set_xticklabels([str(x) for x in minute_tick_values], fontsize=11)
+        ax.set_xlabel(self._time_axis_label())
         for y in np.arange(0.5, len(mapping), 1.0):
             ax.axhline(y, color="#ffffff", lw=1.0, alpha=0.95, zorder=2)
         if "protocol_phase" in comparison_minute.columns:
@@ -4166,7 +6063,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
                     PHASE_ABBR.get(phase_name, phase_name[:3].upper()),
                     ha="center",
                     va="bottom",
-                    fontsize=8,
+                    fontsize=10,
                     color="#64748b",
                     clip_on=False,
                 )
@@ -4234,8 +6131,8 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
         fig, axes = plt.subplots(
             1,
             3,
-            figsize=(16.8, 4.9),
-            gridspec_kw={"width_ratios": [1.0, 1.0, 1.0], "wspace": 0.34},
+            figsize=(17.2, 5.6),
+            gridspec_kw={"width_ratios": [1.15, 0.9, 1.08], "wspace": 0.32},
             constrained_layout=True,
         )
 
@@ -4247,70 +6144,89 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             .fillna(0)
             .astype(int)
         )
-        bars = axes[0].bar(
-            cond_counts.index,
-            cond_counts.values,
+        ypos = np.arange(len(cond_counts), dtype=float)
+        axes[0].hlines(ypos, 0, cond_counts.to_numpy(dtype=float), color="#d7e0ea", linewidth=3.2, zorder=1)
+        axes[0].scatter(
+            cond_counts.to_numpy(dtype=float),
+            ypos,
+            s=170,
             color=[CONDITION_COLORS.get(x, "#475569") for x in cond_counts.index],
-            width=0.68,
+            edgecolors="#172033",
+            linewidths=0.7,
+            zorder=3,
         )
-        axes[0].set_ylabel("Sessions")
-        axes[0].set_ylim(0, max(float(cond_counts.max()) * 1.22, 1.0))
-        axes[0].tick_params(axis="x", rotation=0)
+        for idx, (label, value) in enumerate(cond_counts.items()):
+            axes[0].text(
+                max(float(value) * 0.48, 2.2),
+                idx,
+                f"{label} | n={int(value)}",
+                ha="center",
+                va="center",
+                fontsize=10,
+                color="#172033",
+                bbox={"boxstyle": "round,pad=0.18", "fc": "#ffffff", "ec": "#dbe4ee", "lw": 0.35, "alpha": 0.96},
+                zorder=4,
+            )
+        axes[0].set_yticks(ypos)
+        axes[0].set_yticklabels(["" for _ in ypos])
+        axes[0].set_xlim(0, max(float(cond_counts.max()) * 1.18, 1.0))
+        axes[0].set_xlabel("Sessions")
+        axes[0].set_title("Session types")
+        axes[0].invert_yaxis()
+        axes[0].grid(True, axis="x", alpha=0.2)
+        axes[0].grid(False, axis="y")
 
-        factor_counts = [
-            ("Illuminance", session_summary["illuminance_level"].astype(str).value_counts().reindex(["DIM", "BRI"]).fillna(0)),
-            ("Diurnal timing", session_summary["time_of_day"].astype(str).value_counts().reindex(["MOR", "MID"]).fillna(0)),
-        ]
         factor_palette = {
-            "DIM": CONDITION_COLORS.get("DIM-MOR", "#475569"),
-            "BRI": CONDITION_COLORS.get("BRI-MID", "#1d4ed8"),
-            "MOR": "#0f766e",
-            "MID": "#ea580c",
+            "DIM": "#5b6472",
+            "BRI": "#2563eb",
+            "MOR": "#0b6e4f",
+            "MID": "#c96b00",
         }
-        group_positions = np.array([0.0, 1.6], dtype=float)
-        illuminance_counts = factor_counts[0][1]
-        timing_counts = factor_counts[1][1]
-        illuminance_parts = [("DIM", float(illuminance_counts.get("DIM", 0))), ("BRI", float(illuminance_counts.get("BRI", 0)))]
-        timing_parts = [("MOR", float(timing_counts.get("MOR", 0))), ("MID", float(timing_counts.get("MID", 0)))]
-        bar_width = 0.7
-        bottom = 0.0
-        for idx, (level, value) in enumerate(illuminance_parts):
-            axes[1].bar(
-                group_positions[0],
-                value,
-                bottom=bottom,
-                width=bar_width,
-                color=factor_palette[level],
-                edgecolor="white",
-                linewidth=0.8,
-                label=level,
-            )
-            bottom += value
-        illum_total = bottom
-        bottom = 0.0
-        for idx, (level, value) in enumerate(timing_parts):
-            axes[1].bar(
-                group_positions[1],
-                value,
-                bottom=bottom,
-                width=bar_width,
-                color=factor_palette[level],
-                edgecolor="white",
-                linewidth=0.8,
-                label=level,
-            )
-            bottom += value
-        timing_total = bottom
-        axes[1].set_xticks(group_positions)
-        axes[1].set_xticklabels(["Illuminance", "Diurnal timing"])
-        axes[1].set_ylabel("Sessions")
-        axes[1].set_ylim(0, max(float(max(illum_total, timing_total)) * 1.18, 1.0))
-        axes[1].set_xlim(-0.75, 2.35)
-        axes[1].grid(True, axis="y", alpha=0.2)
-        axes[1].grid(False, axis="x")
-        axes[1].text(group_positions[0], illum_total + 0.25, f"{int(illum_total)}", ha="center", va="bottom", fontsize=9, color="#334155", fontweight="bold")
-        axes[1].text(group_positions[1], timing_total + 0.25, f"{int(timing_total)}", ha="center", va="bottom", fontsize=9, color="#334155", fontweight="bold")
-        axes[1].legend(frameon=False, fontsize=8.5, ncol=4, loc="upper center", bbox_to_anchor=(0.5, 1.14))
+        design_matrix = (
+            session_summary.groupby(["illuminance_level", "time_of_day"]).size().unstack(fill_value=0).reindex(index=["DIM", "BRI"], columns=["MOR", "MID"]).fillna(0)
+        )
+        condition_lookup = {
+            ("DIM", "MOR"): "DIM-MOR",
+            ("DIM", "MID"): "DIM-MID",
+            ("BRI", "MOR"): "BRI-MOR",
+            ("BRI", "MID"): "BRI-MID",
+        }
+        axes[1].set_title("Design balance")
+        axes[1].set_xlabel("Diurnal timing")
+        axes[1].set_ylabel("Illuminance")
+        axes[1].set_xlim(-0.5, len(design_matrix.columns) - 0.5)
+        axes[1].set_ylim(len(design_matrix.index) - 0.5, -0.5)
+        axes[1].set_xticks(range(len(design_matrix.columns)))
+        axes[1].set_xticklabels([str(col) for col in design_matrix.columns])
+        axes[1].set_yticks(range(len(design_matrix.index)))
+        axes[1].set_yticklabels([str(idx) for idx in design_matrix.index])
+        axes[1].grid(False)
+        for i, illum in enumerate(design_matrix.index):
+            for j, timing in enumerate(design_matrix.columns):
+                cell_condition = condition_lookup.get((str(illum), str(timing)), "")
+                face = CONDITION_COLORS.get(cell_condition, "#cbd5e1")
+                rect = Rectangle((j - 0.5, i - 0.5), 1.0, 1.0, facecolor=face, edgecolor="white", linewidth=2.2)
+                axes[1].add_patch(rect)
+                count_val = int(design_matrix.loc[illum, timing])
+                axes[1].text(
+                    j,
+                    i - 0.09,
+                    cell_condition,
+                    ha="center",
+                    va="center",
+                    fontsize=10,
+                    color="white",
+                    fontweight="bold",
+                )
+                axes[1].text(
+                    j,
+                    i + 0.18,
+                    f"n={count_val}",
+                    ha="center",
+                    va="center",
+                    fontsize=10,
+                    color="white",
+                )
 
         support_cols = [
             ("Questionnaire", "questionnaire_completeness"),
@@ -4324,14 +6240,15 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             .reindex(cond_order)
         )
         mat = support_table.to_numpy(dtype=float)
-        cmap = LinearSegmentedColormap.from_list("session_support", ["#fff7ed", "#fde68a", "#0f766e"])
+        cmap = LinearSegmentedColormap.from_list("session_support", ["#fff7ed", "#bfdbfe", "#0b6e4f"])
         im = axes[2].imshow(mat, aspect="auto", cmap=cmap, vmin=0, vmax=1)
         axes[2].grid(False)
         axes[2].set_xticks(range(len(support_cols)))
         axes[2].set_xticklabels([label for label, _ in support_cols], rotation=0, ha="center")
         axes[2].set_yticks(range(len(cond_order)))
         axes[2].set_yticklabels(cond_order)
-        axes[2].tick_params(axis="x", labelsize=9, pad=8)
+        axes[2].tick_params(axis="x", labelsize=11, pad=8)
+        axes[2].set_title("Mean analytic support")
         for row in range(mat.shape[0]):
             for col in range(mat.shape[1]):
                 val = float(mat[row, col])
@@ -4341,178 +6258,295 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
                     f"{val:.2f}",
                     ha="center",
                     va="center",
-                    fontsize=8.5,
+                    fontsize=10.5,
                     color="white" if val >= 0.62 else "#172033",
                     fontweight="bold",
                 )
-        plt.colorbar(im, ax=axes[2], fraction=0.05, pad=0.05, label="Mean support fraction")
+        plt.colorbar(im, ax=axes[2], fraction=0.046, pad=0.03, label="Mean support fraction")
 
         for ax in axes:
             ax.set_axisbelow(True)
             if ax is not axes[2]:
                 ax.grid(True, axis="y", alpha=0.18)
+        axes[1].grid(False)
         fig._cltr_panel_notes = [
-            "Left|Session types|The number of sessions contributing to each condition-defined session type.",
-            "Middle|Factor balance|Balance across the two design factors, illuminance and diurnal timing.",
+            "Left|Session types|Condition-defined session types shown as ordered lollipop counts so the study composition is readable at a glance.",
+            "Middle|Design balance|A 2x2 balance matrix showing how sessions distribute across illuminance and diurnal-timing factors.",
             "Right|Mean analytic support by session type|Mean analytic support by session type for questionnaire, Empatica, BIOPAC, and indoor environmental streams.",
         ]
         return fig
 
     def _fig_cohort_window_validation(self, c: dict):
-        support = c.get("condition_support_summary", pd.DataFrame()).copy()
-        agreement = c.get("sensor_agreement", pd.DataFrame()).copy()
-        if support.empty:
+        signal_audit = c.get("signal_audit_summary", pd.DataFrame()).copy()
+        session_signal_audit = c.get("session_signal_audit", pd.DataFrame()).copy()
+        if signal_audit.empty:
             return None
-        support["condition_label"] = support["condition_code"].astype(str)
-        fig, axes = plt.subplots(2, 2, figsize=(12.8, 8.2))
+        fig = plt.figure(figsize=(16.2, 10.6))
+        gs = fig.add_gridspec(1, 2, width_ratios=[1.2, 0.95])
+        landscape_ax = fig.add_subplot(gs[0, 0])
+        quality_ax = fig.add_subplot(gs[0, 1])
 
-        cond_order = [x for x in CONDITION_ORDER if x in support["condition_code"].astype(str).unique()]
-        if not cond_order:
-            cond_order = support["condition_code"].astype(str).tolist()
-        temp = support.set_index("condition_code").reindex(cond_order)
+        stream_label_map = {str(item["signal_stream"]): str(item["label"]) for item in DEVICE_STREAM_CATALOG}
+        role_label_map = {
+            "primary": "Primary",
+            "primary_with_qc": "Primary with QC",
+            "subset_only": "Subset only",
+            "secondary_validation": "Secondary validation",
+            "secondary_only": "Secondary only",
+            "not_primary": "Not primary",
+            "not_recommended": "Not recommended",
+        }
+        role_color_map = {
+            "primary": "#0b6e4f",
+            "primary_with_qc": "#c96b00",
+            "subset_only": "#a83a32",
+            "secondary_validation": "#1d4ed8",
+            "secondary_only": "#5b6472",
+            "not_primary": "#5b6472",
+            "not_recommended": "#7f1d1d",
+        }
+        adequacy_fill_map = {
+            "strong": "#dff3ea",
+            "usable_with_caution": "#fef0d9",
+            "limited": "#f8ddda",
+            "not_audited": "#e2e8f0",
+        }
+        audit = signal_audit.copy()
+        audit["stream_label"] = audit["signal_stream"].astype(str).map(stream_label_map).fillna(audit["signal_stream"].astype(str))
+        audit["adequacy_score"] = to_numeric(audit.get("adequacy_score", pd.Series(dtype=float))).fillna(0)
+        audit["coverage"] = to_numeric(audit.get("mean_coverage_fraction", pd.Series(dtype=float)))
+        audit["quality"] = to_numeric(audit.get("mean_quality_fraction", pd.Series(dtype=float)))
+        audit["plausibility"] = to_numeric(audit.get("mean_plausible_fraction", pd.Series(dtype=float)))
+        audit["role_label"] = audit["recommended_role"].astype(str).map(role_label_map).fillna(audit["recommended_role"].astype(str))
+        audit["role_color"] = audit["recommended_role"].astype(str).map(role_color_map).fillna("#64748b")
+        audit["adequacy_fill"] = audit["adequacy_status"].astype(str).map(adequacy_fill_map).fillna("#e2e8f0")
 
-        x = np.arange(len(cond_order), dtype=float)
-        overlap_cols = [
-            ("hr_overlap_minutes__mean", "Heart rate", "#111827"),
-            ("eda_overlap_minutes__mean", "EDA", "#2563eb"),
-            ("temp_overlap_minutes__mean", "Temperature", "#ea580c"),
+        flagged_streams = self._flagged_stream_session_register(session_signal_audit)
+        flagged_small = flagged_streams[["signal_stream", "affected_sessions", "primary_concern_driver"]].copy() if not flagged_streams.empty else pd.DataFrame(columns=["signal_stream", "affected_sessions", "primary_concern_driver"])
+        audit = audit.merge(flagged_small, on="signal_stream", how="left")
+        audit["affected_sessions"] = to_numeric(audit.get("affected_sessions", pd.Series(dtype=float))).fillna(0)
+        concern_short = {
+            "Missingness / coverage": "Coverage",
+            "Plausibility / out-of-range values": "Plausibility",
+            "Quality flag support": "Quality",
+            "Cross-device agreement": "Agreement",
+        }
+        audit["concern_short"] = audit["primary_concern_driver"].astype(str).map(concern_short).fillna("")
+        device_order = {"Empatica": 0, "BIOPAC": 1}
+        role_order = {"primary": 0, "primary_with_qc": 1, "secondary_validation": 2, "secondary_only": 3, "subset_only": 4, "not_primary": 5, "not_recommended": 6}
+        audit = audit.sort_values(
+            ["device", "recommended_role", "adequacy_score", "stream_label"],
+            ascending=[True, True, False, True],
+            key=lambda col: col.map(device_order if col.name == "device" else role_order) if col.name in {"device", "recommended_role"} else col,
+        ).reset_index(drop=True)
+
+        y = np.arange(len(audit), dtype=float)
+        landscape_ax.axvspan(0, 60, color="#fbefee", zorder=0)
+        landscape_ax.axvspan(60, 80, color="#fdf5e8", zorder=0)
+        landscape_ax.axvspan(80, 100, color="#edf8f2", zorder=0)
+        for idx, row in enumerate(audit.itertuples(index=False)):
+            landscape_ax.hlines(idx, 0, float(row.adequacy_score), color="#cbd5e1", linewidth=2.8, zorder=1)
+            landscape_ax.scatter(
+                float(row.adequacy_score),
+                idx,
+                s=130,
+                color=row.role_color,
+                edgecolors="#172033",
+                linewidths=0.8,
+                zorder=3,
+            )
+            role_short = {
+                "Primary": "Primary",
+                "Primary with QC": "QC",
+                "Subset only": "Subset",
+            }.get(str(row.role_label), str(row.role_label))
+            note_bits = [f"{int(round(float(row.adequacy_score)))}", role_short]
+            if float(row.affected_sessions) > 0:
+                note_bits.append(f"F={int(row.affected_sessions)}")
+            score = float(row.adequacy_score)
+            label_x = min(max(score * 0.52, 12.0), max(score - 4.0, 12.0))
+            landscape_ax.text(
+                label_x,
+                idx,
+                " | ".join(note_bits),
+                va="center",
+                ha="center",
+                fontsize=9.5,
+                color="#172033",
+                bbox={"boxstyle": "round,pad=0.18", "fc": "#ffffff", "ec": "#dbe4ee", "lw": 0.35, "alpha": 0.96},
+                zorder=4,
+            )
+        landscape_ax.set_yticks(y)
+        landscape_ax.set_yticklabels(audit["stream_label"])
+        landscape_ax.set_xlim(0, 104)
+        landscape_ax.set_xlabel("Adequacy score")
+        landscape_ax.set_title("All audited device streams")
+        landscape_ax.invert_yaxis()
+        landscape_ax.grid(True, axis="x", alpha=0.22)
+        landscape_ax.grid(False, axis="y")
+        landscape_legend_handles = [
+            Patch(facecolor="#0f766e", edgecolor="none", label="Primary"),
+            Patch(facecolor="#ea580c", edgecolor="none", label="Primary with QC"),
+            Patch(facecolor="#b91c1c", edgecolor="none", label="Subset only"),
         ]
-        for idx, (col, label, color) in enumerate(overlap_cols):
-            vals = to_numeric(temp[col]).fillna(0).to_numpy(dtype=float) if col in temp.columns else np.zeros(len(cond_order))
-            axes[0, 0].bar(x + (idx - 1) * 0.24, vals, width=0.24, color=color, label=label)
-        axes[0, 0].set_xticks(x)
-        axes[0, 0].set_xticklabels(cond_order)
-        axes[0, 0].set_ylabel("Mean overlap minutes")
-        axes[0, 0].set_title("Paired overlap by condition")
-        axes[0, 0].legend(frameon=False, fontsize=8.5, ncol=3, loc="upper left", bbox_to_anchor=(0.0, 1.18))
+        landscape_ax.legend(
+            handles=landscape_legend_handles,
+            frameon=False,
+            ncol=3,
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.085),
+            columnspacing=0.95,
+            handletextpad=0.42,
+            borderaxespad=0.0,
+        )
 
+        quality_cols = [
+            ("coverage", "Coverage"),
+            ("quality", "Quality"),
+            ("plausibility", "Plausibility"),
+        ]
+        quality_matrix = audit[[col for col, _ in quality_cols]].to_numpy(dtype=float)
+        quality_im = quality_ax.imshow(np.nan_to_num(quality_matrix, nan=0.0), aspect="auto", cmap="GnBu", vmin=0, vmax=1)
+        quality_ax.set_xticks(range(len(quality_cols)))
+        quality_ax.set_xticklabels([label for _, label in quality_cols])
+        quality_ax.set_yticks(y)
+        quality_ax.set_yticklabels(audit["stream_label"])
+        quality_ax.set_title("Validity components across audited streams")
+        quality_ax.grid(False)
+        quality_ax.xaxis.tick_top()
+        quality_ax.tick_params(axis="x", pad=8)
+        for i in range(quality_matrix.shape[0]):
+            for j in range(quality_matrix.shape[1]):
+                value = quality_matrix[i, j]
+                txt = "n/a" if pd.isna(value) else f"{value:.2f}"
+                quality_ax.text(
+                    j,
+                    i,
+                    txt,
+                    ha="center",
+                    va="center",
+                    fontsize=10,
+                    color="#172033",
+                )
+        plt.colorbar(quality_im, ax=quality_ax, fraction=0.04, pad=0.015, label="Fraction")
+
+        fig._cltr_panel_notes = [
+            "Left|All audited device streams|Each audited Empatica and BIOPAC stream is shown once, with adequacy score, policy role, flagged-session burden, and dominant concern driver kept in a single ordered landscape.",
+            "Right|Validity components across audited streams|Coverage, quality support, and plausibility are shown for every audited stream so the full modality inventory can be reviewed without collapsing the audit into only the comparable device pairs.",
+        ]
+        fig.tight_layout(rect=(0, 0.065, 1, 0.975))
+        return fig
+
+    def _fig_cohort_comparable_validation_summary(self, c: dict):
+        support = c.get("condition_support_summary", pd.DataFrame()).copy()
+        agreement_summary = c.get("agreement_summary", pd.DataFrame()).copy()
+        if support.empty and agreement_summary.empty:
+            return None
+        fig, axes = plt.subplots(1, 3, figsize=(16.0, 5.6), gridspec_kw={"width_ratios": [1.15, 1.0, 0.92]})
         metrics = ["heart_rate", "eda", "temperature"]
         metric_labels = {"heart_rate": "Heart rate", "eda": "EDA", "temperature": "Temperature"}
         metric_colors = {"heart_rate": "#111827", "eda": "#2563eb", "temperature": "#ea580c"}
 
-        if agreement.empty:
-            axes[0, 1].axis("off")
-            axes[1, 0].axis("off")
-            axes[1, 1].axis("off")
-            fig._cltr_panel_notes = [
-                "Top left|Paired overlap by condition|Mean paired-device overlap minutes by condition and modality.",
-                "Summary|Agreement summary unavailable|No paired-device agreement summary was available for this cohort export.",
-            ]
-            fig.tight_layout(rect=(0, 0, 1, 0.96))
-            return fig
-
-        agg = (
-            agreement.groupby(["metric", "condition_code"], as_index=False)
-            .agg(
-                eligible_sessions=("eligible", "sum"),
-                sessions=("session_id", "nunique"),
-            )
-        )
-        for idx, metric in enumerate(metrics):
-            cur = agg.loc[agg["metric"].astype(str) == metric].set_index("condition_code").reindex(cond_order)
-            vals = to_numeric(cur["eligible_sessions"]).fillna(0).to_numpy(dtype=float)
-            axes[0, 1].bar(
-                x + (idx - 1) * 0.24,
-                vals,
-                width=0.24,
-                color=metric_colors[metric],
-                label=metric_labels[metric],
-            )
-        axes[0, 1].set_xticks(x)
-        axes[0, 1].set_xticklabels(cond_order)
-        axes[0, 1].set_ylabel("Eligible sessions")
-        axes[0, 1].set_title("Validation-ready sessions")
-        axes[0, 1].legend(frameon=False, fontsize=8.5, ncol=3, loc="upper left", bbox_to_anchor=(0.0, 1.18))
-
-        eligible = agreement.loc[to_numeric(agreement["eligible"]).fillna(0) > 0].copy()
-        spearman_data = []
-        mae_data = []
-        for metric in metrics:
-            cur = eligible.loc[eligible["metric"].astype(str) == metric]
-            spearman_data.append(to_numeric(cur.get("spearman_r", pd.Series(dtype=float))).dropna().to_numpy(dtype=float))
-            mae_data.append(to_numeric(cur.get("mae", pd.Series(dtype=float))).dropna().to_numpy(dtype=float))
-        box_positions = np.arange(1, len(metrics) + 1, dtype=float)
-        rng = np.random.default_rng(42)
-
-        bp = axes[1, 0].boxplot(
-            spearman_data,
-            positions=box_positions,
-            widths=0.56,
-            patch_artist=True,
-            showfliers=False,
-            medianprops={"color": "white", "linewidth": 1.4},
-            boxprops={"linewidth": 0.8},
-            whiskerprops={"linewidth": 0.8},
-            capprops={"linewidth": 0.8},
-        )
-        for patch, metric in zip(bp["boxes"], metrics):
-            patch.set_facecolor(metric_colors[metric])
-            patch.set_alpha(0.82)
-            patch.set_edgecolor(metric_colors[metric])
-        for idx, (metric, values) in enumerate(zip(metrics, spearman_data), start=1):
-            if len(values) == 0:
-                continue
-            jitter = rng.normal(0, 0.045, size=len(values))
-            axes[1, 0].scatter(
-                np.full(len(values), idx, dtype=float) + jitter,
-                values,
-                s=14,
-                alpha=0.35,
-                color=metric_colors[metric],
-                edgecolors="none",
-                zorder=3,
-            )
-        axes[1, 0].axhline(0.7, color="#94a3b8", lw=1.0, ls="--")
-        axes[1, 0].set_xticks(box_positions)
-        axes[1, 0].set_xticklabels([metric_labels[m] for m in metrics])
-        axes[1, 0].set_ylabel("Spearman r")
-        axes[1, 0].set_title("Agreement strength across eligible sessions")
-        axes[1, 0].set_ylim(-1.05, 1.05)
-
-        bp2 = axes[1, 1].boxplot(
-            mae_data,
-            positions=box_positions,
-            widths=0.56,
-            patch_artist=True,
-            showfliers=False,
-            medianprops={"color": "white", "linewidth": 1.4},
-            boxprops={"linewidth": 0.8},
-            whiskerprops={"linewidth": 0.8},
-            capprops={"linewidth": 0.8},
-        )
-        for patch, metric in zip(bp2["boxes"], metrics):
-            patch.set_facecolor(metric_colors[metric])
-            patch.set_alpha(0.82)
-            patch.set_edgecolor(metric_colors[metric])
-        for idx, (metric, values) in enumerate(zip(metrics, mae_data), start=1):
-            if len(values) == 0:
-                continue
-            jitter = rng.normal(0, 0.045, size=len(values))
-            axes[1, 1].scatter(
-                np.full(len(values), idx, dtype=float) + jitter,
-                values,
-                s=14,
-                alpha=0.35,
-                color=metric_colors[metric],
-                edgecolors="none",
-                zorder=3,
-            )
-        axes[1, 1].set_xticks(box_positions)
-        axes[1, 1].set_xticklabels([metric_labels[m] for m in metrics])
-        axes[1, 1].set_ylabel("Mean absolute error")
-        axes[1, 1].set_title("Magnitude discrepancy across eligible sessions")
-
-        for ax in axes.ravel():
-            ax.set_axisbelow(True)
-            ax.grid(True, axis="y", alpha=0.2)
-
-        fig._cltr_panel_notes = [
-            "Top left|Paired overlap by condition|Mean paired-device overlap minutes by condition for heart rate, electrodermal activity, and temperature.",
-            "Top right|Validation-ready sessions|How many sessions per condition meet the paired-device validation threshold for each modality.",
-            "Bottom left|Agreement strength across eligible sessions|Agreement strength across eligible sessions; heart rate validates well in the subset where overlap exists, while electrodermal agreement is weak.",
-            "Bottom right|Magnitude discrepancy across eligible sessions|Magnitude discrepancy across eligible sessions so device disagreement remains visible even when overlap is complete.",
+        cond_order = [x for x in CONDITION_ORDER if x in support.get("condition_code", pd.Series(dtype=str)).astype(str).unique()]
+        if not cond_order and not support.empty:
+            cond_order = support["condition_code"].astype(str).tolist()
+        temp = support.set_index("condition_code").reindex(cond_order) if not support.empty else pd.DataFrame(index=cond_order)
+        x = np.arange(len(cond_order), dtype=float)
+        overlap_cols = [
+            ("hr_overlap_minutes__mean", "heart_rate"),
+            ("eda_overlap_minutes__mean", "eda"),
+            ("temp_overlap_minutes__mean", "temperature"),
         ]
-        fig.tight_layout(rect=(0, 0, 1, 0.94))
+        if cond_order:
+            for idx, (col, metric) in enumerate(overlap_cols):
+                vals = to_numeric(temp[col]).fillna(0).to_numpy(dtype=float) if col in temp.columns else np.zeros(len(cond_order))
+                axes[0].bar(x + (idx - 1) * 0.24, vals, width=0.24, color=metric_colors[metric], label=metric_labels[metric])
+            axes[0].set_xticks(x)
+            axes[0].set_xticklabels(cond_order)
+            axes[0].set_ylabel("Mean overlap minutes")
+            axes[0].set_title("Comparable-pair overlap by condition")
+            self._place_topbar_legend(axes[0], y=1.04)
+        else:
+            axes[0].axis("off")
+
+        if not agreement_summary.empty:
+            agreement_summary = agreement_summary.loc[agreement_summary["metric"].astype(str).isin(metrics)].copy()
+            agreement_summary["metric"] = pd.Categorical(agreement_summary["metric"].astype(str), categories=metrics, ordered=True)
+            agreement_summary = agreement_summary.sort_values("metric")
+            xpos = np.arange(len(agreement_summary), dtype=float)
+            total_sessions = to_numeric(agreement_summary.get("n_sessions", pd.Series(dtype=float))).fillna(0).to_numpy(dtype=float)
+            eligible_sessions = to_numeric(agreement_summary.get("n_eligible_sessions", pd.Series(dtype=float))).fillna(0).to_numpy(dtype=float)
+            total_bars = axes[1].bar(xpos, total_sessions, width=0.58, color="#e2e8f0", edgecolor="#cbd5e1", linewidth=1.0, label="Cohort sessions")
+            axes[1].bar(
+                xpos,
+                eligible_sessions,
+                width=0.42,
+                color=[metric_colors[str(metric)] for metric in agreement_summary["metric"].astype(str)],
+                edgecolor="none",
+                label="Validation-eligible",
+            )
+            axes[1].set_xticks(xpos)
+            axes[1].set_xticklabels([metric_labels[str(metric)] for metric in agreement_summary["metric"].astype(str)])
+            axes[1].set_ylabel("Sessions")
+            axes[1].set_title("Validation readiness against cohort size")
+            ymax = max(float(total_sessions.max()) if len(total_sessions) else 0.0, 1.0)
+            axes[1].set_ylim(0, ymax * 1.28)
+            self._place_topbar_legend(axes[1], y=1.04)
+            for idx, row in enumerate(agreement_summary.itertuples(index=False)):
+                axes[1].text(
+                    idx,
+                    float(eligible_sessions[idx]) + ymax * 0.05,
+                    f"{int(eligible_sessions[idx])}/{int(total_sessions[idx])}",
+                    ha="center",
+                    va="bottom",
+                    fontsize=10,
+                    color="#172033",
+                )
+
+            corr_vals = to_numeric(agreement_summary.get("median_spearman_r", pd.Series(dtype=float))).fillna(np.nan).to_numpy(dtype=float)
+            mae_vals = to_numeric(agreement_summary.get("median_mae", pd.Series(dtype=float))).fillna(np.nan).to_numpy(dtype=float)
+            overlap_vals = to_numeric(agreement_summary.get("median_overlap_minutes", pd.Series(dtype=float))).fillna(np.nan).to_numpy(dtype=float)
+            ypos = np.arange(len(agreement_summary), dtype=float)
+            axes[2].hlines(ypos, 0, corr_vals, color="#cbd5e1", linewidth=2.8)
+            axes[2].scatter(
+                corr_vals,
+                ypos,
+                s=130,
+                color=[metric_colors[str(metric)] for metric in agreement_summary["metric"].astype(str)],
+                edgecolors="#172033",
+                linewidths=0.8,
+                zorder=3,
+            )
+            axes[2].axvline(0.7, color="#94a3b8", lw=1.0, ls="--")
+            axes[2].set_yticks(ypos)
+            axes[2].set_yticklabels([metric_labels[str(metric)] for metric in agreement_summary["metric"].astype(str)])
+            axes[2].set_xlim(-0.02, 1.04)
+            axes[2].set_xlabel("Median Spearman r")
+            axes[2].set_title("Agreement strength and error")
+            for idx, row in enumerate(agreement_summary.itertuples(index=False)):
+                axes[2].text(
+                    min(float(corr_vals[idx]) + 0.03, 0.99),
+                    idx,
+                    f"MAE {float(mae_vals[idx]):.2f} | {float(overlap_vals[idx]):.0f} min",
+                    va="center",
+                    fontsize=10,
+                    color="#172033",
+                )
+            axes[2].invert_yaxis()
+        else:
+            axes[1].axis("off")
+            axes[2].axis("off")
+
+        for ax in axes:
+            if ax.axison:
+                ax.set_axisbelow(True)
+                ax.grid(True, axis="y", alpha=0.2)
+        fig._cltr_panel_notes = [
+            "Left|Comparable-pair overlap by condition|Mean overlap minutes by condition for the directly comparable Empatica/BIOPAC heart-rate, electrodermal, and temperature families.",
+            "Center|Validation-ready sessions|Eligible-session counts for each comparable family shown against the full cohort session count.",
+            "Right|Agreement strength and error|Median correlation is shown directly, with median error and overlap annotated per comparable family.",
+        ]
+        fig.tight_layout(rect=(0, 0.035, 1, 0.97))
         return fig
 
     def _fig_cohort_support_map(self, minute: pd.DataFrame):
@@ -4520,9 +6554,11 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             return None
         mapping = [
             ("Questionnaire", "questionnaire_n"),
+            ("Fan", "support_fan"),
             ("Empatica", "support_empatica"),
             ("BIOPAC", "support_biopac"),
             ("Indoor", "support_indoor"),
+            ("Outdoor", "support_outdoor"),
             ("HR overlap", "support_core_overlap_hr"),
             ("EDA overlap", "support_core_overlap_eda"),
             ("Temp overlap", "support_core_overlap_temp"),
@@ -4544,6 +6580,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             return None
         rows = []
         labels = []
+        row_meta = []
         for cond in cond_order:
             dcond = minute.loc[minute["condition_code"].astype(str) == cond].copy()
             if dcond.empty:
@@ -4558,12 +6595,13 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
                     series = pd.Series(dtype=float)
                 series = series.reindex(minute_index_values).fillna(0.0)
                 rows.append(series.to_numpy(dtype=float))
-                labels.append(f"{cond} | {label}")
+                labels.append(label)
+                row_meta.append({"condition": cond, "label": label})
         if not rows:
             return None
         mat = np.vstack(rows)
-        fig, ax = plt.subplots(figsize=(13.2, max(5.4, 0.34 * len(labels) + 1.8)))
-        cmap = LinearSegmentedColormap.from_list("cohort_support", ["#f8fafc", "#0f766e"])
+        fig, ax = plt.subplots(figsize=(14.4, max(5.2, 0.18 * len(labels) + 1.7)))
+        cmap = LinearSegmentedColormap.from_list("cohort_support", ["#f8fafc", "#dbeafe", "#0b6e4f"])
         minute_min = float(minute_index_values[0]) - 0.5
         minute_max = float(minute_index_values[-1]) + 0.5
         im = ax.imshow(
@@ -4577,20 +6615,52 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
         )
         ax.grid(False)
         ax.set_yticks(range(len(labels)))
-        ax.set_yticklabels(labels, fontsize=8)
+        ax.set_yticklabels(labels, fontsize=8.5)
         tick_count = min(8, len(minute_index_values))
         tick_indices = np.linspace(0, len(minute_index_values) - 1, tick_count, dtype=int) if tick_count > 1 else np.array([0])
         tick_values = [minute_index_values[idx] for idx in tick_indices]
         ax.set_xticks(tick_values)
-        ax.set_xticklabels([str(value) for value in tick_values], fontsize=9)
+        ax.set_xticklabels([str(value) for value in tick_values], fontsize=11)
         ax.set_xlabel("Timeline minute")
+        ax.set_title("Phase-annotated cohort availability and overlap map")
         self._add_phase_spans(ax, minute_template)
-        plt.colorbar(im, ax=ax, shrink=0.82, label="Fraction of sessions with support")
+        group_size = len(mapping)
+        family_breaks = [1, 6]
+        trans = mtransforms.blended_transform_factory(ax.transAxes, ax.transData)
+        for idx, cond in enumerate(cond_order):
+            start = idx * group_size
+            end = start + group_size - 1
+            if start >= len(labels):
+                continue
+            if idx > 0:
+                ax.axhline(start - 0.5, color="#94a3b8", lw=1.2, alpha=0.9)
+            ax.text(
+                -0.17,
+                (start + end) / 2.0,
+                cond,
+                transform=trans,
+                ha="right",
+                va="center",
+                rotation=90,
+                fontsize=10,
+                fontweight="bold",
+                color=CONDITION_COLORS.get(cond, "#334155"),
+                bbox={"boxstyle": "round,pad=0.18", "fc": "#ffffff", "ec": "#cbd5e1", "lw": 0.6, "alpha": 0.96},
+            )
+            for local_row in range(group_size):
+                row_idx = start + local_row
+                if row_idx >= len(labels):
+                    continue
+                if local_row % 2 == 1:
+                    ax.axhspan(row_idx - 0.5, row_idx + 0.5, color="#f8fafc", alpha=0.35, zorder=0)
+                if local_row in family_breaks:
+                    ax.axhline(row_idx - 0.5, color="#cbd5e1", lw=0.9, alpha=0.85)
+        plt.colorbar(im, ax=ax, shrink=0.82, pad=0.02, label="Support fraction")
         fig._cltr_panel_notes = [
-            "Rows show condition-by-modality support across the full cohort protocol timeline.",
-            "Phase annotations mark the shared protocol structure so validation windows can be read against the study timeline.",
+            "Rows are grouped by condition and then by availability family so questionnaire presence, fan/control support, device or environmental source presence, and paired non-null overlap can be compared against the shared protocol timeline.",
+            "Phase annotations mark the shared protocol structure so availability and overlap windows can be read against acclimation, intervention, and terminal phases.",
         ]
-        fig.tight_layout(rect=(0, 0, 1, 0.96))
+        fig.tight_layout(rect=(0.14, 0.02, 1, 0.96))
         return fig
 
     def _cohort_band(self, d: pd.DataFrame, feature: str, ax: plt.Axes):
@@ -4648,8 +6718,8 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
         phase_df = display_minute.drop_duplicates(subset=["minute_index", "protocol_phase"])
         self._add_phase_spans(ax, phase_df)
         self._cohort_band(display_minute, column, ax)
-        ax.set_ylabel(FEATURE_LABELS.get(column, column))
-        ax.set_xlabel("Minute index")
+        ax.set_ylabel(self._axis_label(column))
+        ax.set_xlabel(self._time_axis_label())
         ax.grid(True, axis="y")
         self._apply_discrete_y_axis_matplotlib(ax, display_minute[column], column)
         marker_only = self._is_sparse_observation_channel(column)
@@ -4672,7 +6742,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             part
             for part in [
                 (
-                    f"{FEATURE_LABELS.get(column, column)} is shown as phase-wise condition distributions with raw observation points; questionnaire responses are discrete event-time observations, not continuous trajectories."
+                    self._cohort_questionnaire_caption(column)
                     if self._is_sparse_observation_channel(column)
                     else (
                         f"{FEATURE_LABELS.get(column, column)} is shown as condition-stratified rolling-median step trends with interquartile bands; faint markers retain the unsmoothed minute medians."
@@ -4761,16 +6831,25 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             lower_annotations.extend(counts)
         ax.set_xticks(x)
         ax.set_xticklabels([PHASE_ABBR.get(p, p[:3].upper()) for p in phase_order])
-        ax.set_ylabel(FEATURE_LABELS.get(metric, metric))
-        ax.set_xlabel("Protocol phase")
+        ax.set_ylabel(self._axis_label(metric))
+        ax.set_xlabel(self._phase_axis_label())
         ax.grid(True, axis="y")
         self._apply_discrete_y_axis_matplotlib(ax, temp[metric], metric)
         y_min, y_max = ax.get_ylim()
         y_span = y_max - y_min if y_max > y_min else 1.0
-        y_tail = y_min - 0.12 * y_span
+        y_tail = y_min - 0.08 * y_span
         for xpos, n_obs in lower_annotations:
-            ax.text(xpos, y_tail, f"n={n_obs}", ha="center", va="top", fontsize=7, color="#475569", clip_on=False)
-        ax.set_ylim(y_min - 0.2 * y_span, y_max + 0.04 * y_span)
+            ax.text(
+                xpos,
+                y_tail,
+                f"n={n_obs}",
+                ha="center",
+                va="top",
+                fontsize=7,
+                color="#475569",
+                clip_on=False,
+            )
+        ax.set_ylim(y_min - 0.16 * y_span, y_max + 0.04 * y_span)
         if legend_handles:
             self._place_condition_legend(ax, handles=legend_handles)
         fig.tight_layout()
@@ -4808,16 +6887,124 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
                 )
         return pd.DataFrame(rows)
 
+    def _fig_cohort_condition_comparison_summary(self, minute: pd.DataFrame, metric: str):
+        if minute.empty or metric not in minute.columns or "condition_code" not in minute.columns:
+            return None
+        cols = ["session_id", "condition_code", metric]
+        temp = minute.loc[:, [c for c in cols if c in minute.columns]].copy()
+        temp[metric] = to_numeric(temp[metric])
+        temp = temp.dropna(subset=[metric, "condition_code"])
+        if temp.empty:
+            return None
+        session_values = temp.groupby(["session_id", "condition_code"], as_index=False)[metric].mean()
+        condition_order = [c for c in CONDITION_ORDER if c in session_values["condition_code"].astype(str).unique()]
+        if not condition_order:
+            return None
+        fig, ax = plt.subplots(figsize=self._figsize("wide_single_short"))
+        x = np.arange(len(condition_order), dtype=float)
+        rng = np.random.default_rng(42)
+        violin_groups = []
+        violin_positions = []
+        for idx, cond in enumerate(condition_order):
+            vals = to_numeric(session_values.loc[session_values["condition_code"].astype(str) == cond, metric]).dropna()
+            if vals.empty:
+                continue
+            arr = vals.to_numpy(dtype=float)
+            unique_n = int(len(np.unique(np.round(arr, 6))))
+            if len(arr) >= 5 and unique_n >= 3:
+                violin_groups.append(arr)
+                violin_positions.append(float(x[idx]))
+        if violin_groups:
+            vp = ax.violinplot(
+                violin_groups,
+                positions=violin_positions,
+                widths=0.72,
+                showmeans=False,
+                showmedians=False,
+                showextrema=False,
+            )
+            for body, xpos in zip(vp["bodies"], violin_positions):
+                cond = condition_order[int(round(xpos))]
+                cond_color = CONDITION_COLORS.get(cond, "#475569")
+                body.set_facecolor(cond_color)
+                body.set_edgecolor(cond_color)
+                body.set_alpha(0.14)
+        count_annotations: list[tuple[float, int]] = []
+        for idx, cond in enumerate(condition_order):
+            vals = to_numeric(session_values.loc[session_values["condition_code"].astype(str) == cond, metric]).dropna()
+            if vals.empty:
+                continue
+            arr = vals.to_numpy(dtype=float)
+            cond_color = CONDITION_COLORS.get(cond, "#475569")
+            xpos = float(x[idx])
+            jitter = rng.uniform(-0.08, 0.08, size=len(arr))
+            ax.scatter(np.full(len(arr), xpos) + jitter, arr, s=20, alpha=0.4, color=cond_color, edgecolors="none", zorder=3)
+            q25 = float(np.quantile(arr, 0.25))
+            q75 = float(np.quantile(arr, 0.75))
+            med = float(np.median(arr))
+            ax.vlines(xpos, q25, q75, color=cond_color, linewidth=2.1, zorder=4)
+            ax.hlines(med, xpos - 0.17, xpos + 0.17, color=cond_color, linewidth=2.2, zorder=5)
+            count_annotations.append((xpos, len(arr)))
+        ax.set_xticks(x)
+        ax.set_xticklabels(condition_order)
+        ax.set_xlabel(self._condition_axis_label())
+        ax.set_ylabel(self._axis_label(metric))
+        ax.grid(True, axis="y")
+        self._apply_discrete_y_axis_matplotlib(ax, session_values[metric], metric)
+        y_min, y_max = ax.get_ylim()
+        y_span = y_max - y_min if y_max > y_min else 1.0
+        y_tail = y_min - 0.06 * y_span
+        for xpos, n_obs in count_annotations:
+            ax.text(xpos, y_tail, f"n={n_obs}", ha="center", va="top", fontsize=8, color="#475569", clip_on=False)
+        ax.set_ylim(y_min - 0.12 * y_span, y_max + 0.04 * y_span)
+        fig.tight_layout()
+        return fig
+
     def _fig_cohort_condition_trace(self, minute: pd.DataFrame, metric: str):
         if minute.empty or metric not in minute.columns:
             return None
         if self._is_sparse_observation_channel(metric):
-            return self._fig_sparse_phase_distribution(minute, metric)
+            summary = self._cohort_condition_phase_summary(minute, metric)
+            if summary.empty:
+                return None
+            phase_order = [p for p in PHASE_ORDER if p in summary["protocol_phase"].astype(str).unique()]
+            if not phase_order:
+                return None
+            if len(phase_order) == 1:
+                return self._fig_cohort_condition_comparison_summary(minute, metric)
+            fig, ax = plt.subplots(figsize=self._figsize("wide_single"))
+            x = np.arange(len(phase_order), dtype=float)
+            for cond in [c for c in CONDITION_ORDER if c in summary["condition_code"].astype(str).unique()]:
+                cur = summary.loc[summary["condition_code"].astype(str) == cond].copy()
+                cur["protocol_phase"] = cur["protocol_phase"].astype(str)
+                cur = cur.set_index("protocol_phase").reindex(phase_order).reset_index()
+                y = to_numeric(cur["median"])
+                q25 = to_numeric(cur["q25"])
+                q75 = to_numeric(cur["q75"])
+                valid = y.notna()
+                if not valid.any():
+                    continue
+                xv = x[valid.to_numpy()]
+                yv = y.loc[valid].to_numpy(dtype=float)
+                q25v = q25.loc[valid].to_numpy(dtype=float)
+                q75v = q75.loc[valid].to_numpy(dtype=float)
+                ax.fill_between(xv, q25v, q75v, color=CONDITION_COLORS[cond], alpha=0.18)
+                ax.plot(xv, yv, color=CONDITION_COLORS[cond], lw=2, marker="o", ms=4, label=cond)
+            ax.set_xticks(x)
+            ax.set_xticklabels([PHASE_ABBR.get(p, p[:3].upper()) for p in phase_order])
+            ax.set_ylabel(self._axis_label(metric))
+            ax.set_xlabel(self._phase_axis_label())
+            ax.grid(True, axis="y")
+            self._apply_discrete_y_axis_matplotlib(ax, minute[metric], metric)
+            self._place_condition_legend(ax)
+            fig.tight_layout()
+            return fig
         fig, ax = plt.subplots(figsize=self._figsize("wide_single"))
         self._add_phase_spans(ax, minute.drop_duplicates(subset=["minute_index", "protocol_phase"]))
         self._cohort_band(minute, metric, ax)
-        ax.set_xlabel("Minute index")
-        self._place_condition_legend(ax)
+        ax.set_ylabel(self._axis_label(metric))
+        ax.set_xlabel(self._time_axis_label())
+        self._place_topbar_legend(ax)
         fig.tight_layout()
         return fig
 
@@ -4862,10 +7049,11 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             ax.axhline(0, color="#dbe4ee", lw=0.85, ls="--", zorder=0)
             ax.set_xticks(range(len(axis_phases)))
             ax.set_xticklabels([PHASE_ABBR.get(x, x[:3].upper()) for x in axis_phases])
-            ax.set_ylabel(FEATURE_LABELS.get(metric, metric))
+            ax.set_ylabel(self._axis_label(metric))
+            ax.text(0.01, 0.98, FEATURE_LABELS.get(metric, metric), transform=ax.transAxes, ha="left", va="top", fontsize=10.5, fontweight="bold", color="#172033")
             panel_notes.append(f"{panel_positions[len(panel_notes)]} shows matched condition differences for {FEATURE_LABELS.get(metric, metric)}.")
             self._apply_discrete_y_axis_matplotlib(ax, d["mean_difference"], metric)
-            ax.legend(frameon=False, fontsize=8)
+            ax.legend(frameon=False, fontsize=10)
         for ax in axes[len(metrics):]:
             ax.axis("off")
         fig._cltr_panel_notes = panel_notes
@@ -4880,19 +7068,204 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             keep = keep.loc[keep["eligible"] == 1].copy()
         if keep.empty:
             return pd.DataFrame()
-        sort_cols = ["significant_fdr", "p_value_fdr", "p_value", "n_pairs"]
+        sort_cols = ["significant_fdr", "p_value_fdr", "primary_p_value", "n_pairs"]
         ascending = [False, True, True, False]
         existing_cols = [c for c in sort_cols if c in keep.columns]
         keep = keep.sort_values(existing_cols, ascending=ascending[: len(existing_cols)])
         return keep.head(24).reset_index(drop=True)
 
+    def _contrast_family(self, metric: object) -> str:
+        text = str(metric)
+        if text in {
+            "thermal_comfort",
+            "thermal_sensation",
+            "thermal_preference",
+            "thermal_pleasure",
+            "visual_comfort",
+            "room_comfort",
+            "visual_sensation",
+            "color_sensation",
+            "sound_comfort_dbA",
+            "air_quality_comfort",
+        }:
+            return "Questionnaire and perception"
+        if text.startswith(("indoor_", "outdoor_")):
+            return "Environment"
+        if text.startswith("fan_"):
+            return "Behavior and control"
+        if text.startswith(("empatica_", "biopac_")):
+            return "Wearable and physiology"
+        if any(token in text for token in ["master_", "thermal_gradient", "thermal_state_index", "_delta_"]):
+            return "Derived thermal and deltas"
+        return "Other"
+
+    def _cohort_balanced_contrast_register(self, contrasts: pd.DataFrame, *, max_rows: int = 24, per_family: int = 4) -> pd.DataFrame:
+        if contrasts.empty:
+            return pd.DataFrame()
+        keep = contrasts.copy()
+        if "eligible" in keep.columns:
+            keep = keep.loc[keep["eligible"] == 1].copy()
+        if keep.empty:
+            return pd.DataFrame()
+        keep["contrast_family"] = keep["metric"].map(self._contrast_family)
+        sort_cols = [c for c in ["significant_fdr", "p_value_fdr", "primary_p_value", "n_pairs"] if c in keep.columns]
+        ascending = [False, True, True, False][: len(sort_cols)]
+        keep = keep.sort_values(sort_cols, ascending=ascending).reset_index(drop=True)
+        selected_parts: list[pd.DataFrame] = []
+        selected_keys: set[tuple[str, str, str]] = set()
+        for family, d in keep.groupby("contrast_family", sort=False):
+            family_rows = []
+            for metric, dm in d.groupby("metric", sort=False):
+                family_rows.append(dm.head(1))
+            if family_rows:
+                family_pick = pd.concat(family_rows, ignore_index=True).sort_values(sort_cols, ascending=ascending).head(per_family)
+                selected_parts.append(family_pick)
+                for row in family_pick.itertuples(index=False):
+                    selected_keys.add((str(row.metric), str(row.protocol_phase), str(row.comparison)))
+        selected = pd.concat(selected_parts, ignore_index=True) if selected_parts else keep.iloc[0:0].copy()
+        if len(selected) < max_rows:
+            remainder = keep.loc[
+                ~keep.apply(lambda r: (str(r["metric"]), str(r["protocol_phase"]), str(r["comparison"])) in selected_keys, axis=1)
+            ].copy()
+            if not remainder.empty:
+                fill = remainder.head(max_rows - len(selected))
+                selected = pd.concat([selected, fill], ignore_index=True)
+        selected = selected.sort_values(sort_cols, ascending=ascending).head(max_rows).reset_index(drop=True)
+        return selected
+
     def _mixed_effects_register(self, mixed_effects: pd.DataFrame) -> pd.DataFrame:
         if mixed_effects.empty:
             return pd.DataFrame()
-        keep = mixed_effects.copy()
+        keep = self._mixed_effects_fixed_only(mixed_effects)
+        if "term" in keep.columns:
+            keep["term_reading"] = keep["term"].map(self._mixed_effect_term_label)
         if "significant_fdr" in keep.columns:
             keep = keep.sort_values(["significant_fdr", "p_value_fdr", "metric"], ascending=[False, True, True])
         return keep.head(30).reset_index(drop=True)
+
+    def _mixed_effects_fixed_only(self, mixed_effects: pd.DataFrame) -> pd.DataFrame:
+        keep = mixed_effects.copy()
+        if "term" not in keep.columns:
+            return keep
+        term_text = keep["term"].astype(str)
+        return keep.loc[
+            ~term_text.str.contains(r"(?:^Intercept$)|(?:^Group Var$)|(?:^| )Var$| Cov$", regex=True)
+        ].copy()
+
+    def _mixed_effect_term_label(self, term: object) -> str:
+        parts = [self._mixed_effect_component_label(part) for part in str(term).split(":")]
+        if not parts:
+            return str(term)
+        if len(parts) == 1:
+            return parts[0]["main"]
+        left = parts[0]["contrast"]
+        right = parts[1]["context"]
+        if len(parts) == 2:
+            return f"Interaction: the {left} changes across {right}"
+        extra = ", ".join(part["context"] for part in parts[2:])
+        return f"Interaction: the {left} changes across {right}, jointly with {extra}"
+
+    def _mixed_effect_component_label(self, term_part: object) -> dict[str, str]:
+        text = str(term_part)
+        mapping = {
+            "C(illuminance_level)[T.DIM]": {
+                "main": "Illuminance main effect: DIM vs BRI",
+                "contrast": "DIM-BRI illuminance contrast",
+                "context": "illuminance level (DIM vs BRI)",
+            },
+            "C(time_of_day)[T.MOR]": {
+                "main": "Time-of-day main effect: MOR vs MID",
+                "contrast": "MOR-MID time-of-day contrast",
+                "context": "time of day (MOR vs MID)",
+            },
+            "C(protocol_phase)[T.fan_free_control]": {
+                "main": "Phase main effect: FFC vs FCS",
+                "contrast": "FFC-FCS phase contrast",
+                "context": "phase (FFC vs FCS)",
+            },
+            "C(protocol_phase)[T.overall_comfort]": {
+                "main": "Phase main effect: OC vs FCS",
+                "contrast": "OC-FCS phase contrast",
+                "context": "phase (OC vs FCS)",
+            },
+            "C(protocol_phase)[T.skin_rewarming]": {
+                "main": "Phase main effect: SR vs FCS",
+                "contrast": "SR-FCS phase contrast",
+                "context": "phase (SR vs FCS)",
+            },
+            "C(protocol_phase)[T.steady_state]": {
+                "main": "Phase main effect: SS vs FCS",
+                "contrast": "SS-FCS phase contrast",
+                "context": "phase (SS vs FCS)",
+            },
+        }
+        return mapping.get(
+            text,
+            {
+                "main": text,
+                "contrast": text,
+                "context": text,
+            },
+        )
+
+    def _mixed_effect_term_tokens(self, terms: list[str]) -> str:
+        phase_map = {
+            "fan_free_control": "FFC",
+            "overall_comfort": "OC",
+            "skin_rewarming": "SR",
+            "steady_state": "SS",
+        }
+        tokens: list[str] = []
+        for term in terms:
+            parts: list[str] = []
+            if "illuminance_level" in term:
+                parts.append("DIM")
+            if "time_of_day" in term:
+                parts.append("MOR")
+            for raw, abbr in phase_map.items():
+                if raw in term:
+                    parts.append(abbr)
+            if not parts:
+                parts.append(str(term))
+            tokens.append("x".join(parts))
+        ordered: list[str] = []
+        seen: set[str] = set()
+        for token in tokens:
+            if token in seen:
+                continue
+            seen.add(token)
+            ordered.append(token)
+        return fill(", ".join(ordered), width=16)
+
+    def _mixed_effects_diagnostics_register(self, diagnostics: pd.DataFrame) -> pd.DataFrame:
+        if diagnostics.empty:
+            return pd.DataFrame()
+        keep = diagnostics.copy()
+        status_map = {
+            "retained": "Retained",
+            "retained_with_fit_issue": "Retained with fit issue",
+            "fit_failed": "Fit failed",
+            "skipped_insufficient_participants": "Skipped: insufficient participants",
+            "skipped_insufficient_design_variation": "Skipped: insufficient design variation",
+            "no_fixed_effect_terms": "No fixed effects retained",
+        }
+        model_spec_map = {
+            "condition_time_phase_random_phase_slope": "Condition x time x phase with participant random phase slopes",
+            "condition_time_phase_random_intercept": "Condition x time + phase with participant random intercept",
+            "condition_time_random_intercept": "Condition x time with participant random intercept",
+        }
+        if "status" in keep.columns:
+            keep["status"] = keep["status"].astype(str).map(lambda x: status_map.get(x, x.replace("_", " ").title()))
+        if "model_spec" in keep.columns:
+            keep["model_spec"] = keep["model_spec"].astype(str).map(lambda x: model_spec_map.get(x, x.replace("_", " ").title()) if x else "")
+        if "fit_converged" in keep.columns:
+            keep["fit_converged"] = keep["fit_converged"].map({1: "Yes", 0: "No"}).fillna(keep["fit_converged"])
+        if "warning_summary" in keep.columns:
+            keep["warning_summary"] = keep["warning_summary"].fillna("").replace("", "No reported warning")
+        if "status" in keep.columns:
+            keep["_status_rank"] = keep["status"].astype(str).str.startswith("Retained").map({True: 0, False: 1}).fillna(1)
+            keep = keep.sort_values(["_status_rank", "warning_count", "metric"], ascending=[True, False, True]).drop(columns="_status_rank")
+        return keep.reset_index(drop=True)
 
     def _fig_preprocessing_qc_summary(self, qc: pd.DataFrame):
         if qc.empty:
@@ -4904,35 +7277,192 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
         ax.set_yticks(y)
         ax.set_yticklabels([str(x).replace("quality_", "").replace("_", " ") for x in top["metric"]])
         ax.set_xlabel("Valid-minute fraction")
-        ax.set_xlim(0, 1)
+        ax.set_xlim(0, 1.08)
         for idx, row in enumerate(top.itertuples(index=False)):
-            ax.text(min(float(row.valid_fraction) + 0.02, 0.98), idx, f"{float(row.valid_fraction):.2f}", va="center", fontsize=9)
-        fig.tight_layout(rect=(0, 0, 1, 0.96))
+            ax.text(min(float(row.valid_fraction) + 0.02, 1.04), idx, f"{float(row.valid_fraction):.2f}", va="center", fontsize=11)
+        fig.tight_layout(rect=(0, 0, 0.98, 0.96))
         return fig
 
     def _fig_predictive_benchmarks(self, benchmarks: pd.DataFrame):
         if benchmarks.empty:
             return None
-        tasks = list(benchmarks["task"].astype(str).unique())
-        fig, axes = plt.subplots(len(tasks), 1, figsize=(self._figsize("wide_single")[0], 3.2 * len(tasks) + 0.5), sharex=True)
-        if len(tasks) == 1:
-            axes = [axes]
-        for ax, task in zip(axes, tasks):
-            d = benchmarks.loc[benchmarks["task"].astype(str) == task].copy()
-            if d.empty:
-                ax.axis("off")
-                continue
-            d = d.sort_values("balanced_accuracy_mean", ascending=True)
-            y = np.arange(len(d))
-            ax.barh(y, d["balanced_accuracy_mean"], color="#1d4ed8", alpha=0.9, label="Balanced accuracy")
-            for idx, row in enumerate(d.itertuples(index=False)):
-                ax.text(min(float(row.balanced_accuracy_mean) + 0.02, 0.98), idx, f"{float(row.balanced_accuracy_mean):.2f}", va="center", fontsize=9)
-            ax.set_yticks(y)
-            ax.set_yticklabels(d["model"].astype(str))
-            ax.set_xlim(0, 1)
-            ax.set_title(task.replace("_", " ").title(), loc="left")
-        axes[-1].set_xlabel("Grouped-validation balanced accuracy")
+        plot_df = benchmarks.copy()
+        plot_df["row_label"] = (
+            plot_df["task"].astype(str).str.replace("_", " ").str.title()
+            + "\n"
+            + plot_df["feature_set"].astype(str).str.replace("_", " ").str.title()
+            + "\n"
+            + plot_df["validation_scheme"].astype(str).str.replace("_", " ").str.title()
+        )
+        plot_df = plot_df.sort_values("balanced_accuracy_mean", ascending=True).tail(18)
+        fig, ax = plt.subplots(figsize=self._figsize("wide_single_tall"))
+        palette = {
+            "environment_only": "#2563eb",
+            "physiology_only": "#b91c1c",
+            "fused_multimodal": "#0f766e",
+        }
+        y = np.arange(len(plot_df))
+        ax.barh(y, plot_df["balanced_accuracy_mean"], color=[palette.get(str(x), "#475569") for x in plot_df["feature_set"]], alpha=0.92)
+        for idx, row in enumerate(plot_df.itertuples(index=False)):
+            spread = f" +/- {float(row.balanced_accuracy_sd):.2f}" if pd.notna(row.balanced_accuracy_sd) else ""
+            ax.text(min(float(row.balanced_accuracy_mean) + 0.02, 0.98), idx, f"{float(row.balanced_accuracy_mean):.2f}{spread}", va="center", fontsize=10.5)
+        ax.set_yticks(y)
+        ax.set_yticklabels(plot_df["row_label"].astype(str))
+        ax.set_xlim(0, 1)
+        ax.set_xlabel("Balanced accuracy under explicit holdout validation")
+        ax.text(0.01, 0.98, "Comfort-state benchmark landscape", transform=ax.transAxes, ha="left", va="top", fontsize=11, fontweight="bold", color="#172033")
         fig.tight_layout(rect=(0, 0, 1, 0.96))
+        return fig
+
+    def _fig_lag_response_register(self, lag_register: pd.DataFrame, lag_profile: pd.DataFrame):
+        if lag_register.empty:
+            return None
+        d = lag_register.copy().head(12)
+        d["row_label"] = d["predictor"].astype(str).map(lambda x: FEATURE_LABELS.get(x, x)) + " -> " + d["target"].astype(str).map(lambda x: FEATURE_LABELS.get(x, x))
+        d["row_label_wrapped"] = d["predictor"].astype(str).map(lambda x: FEATURE_LABELS.get(x, x)) + "\n-> " + d["target"].astype(str).map(lambda x: FEATURE_LABELS.get(x, x))
+        d = d.sort_values(["evidence_grade", "median_abs_spearman_r", "best_lag_minutes"], ascending=[True, False, True])
+        fig = plt.figure(figsize=(14.8, 6.5))
+        gs = fig.add_gridspec(1, 2, width_ratios=[1.45, 0.95], wspace=0.15)
+        ax_lag = fig.add_subplot(gs[0, 0])
+        ax_strength = fig.add_subplot(gs[0, 1], sharey=ax_lag)
+        y = np.arange(len(d))
+        grade_colors = {"A": "#0f766e", "B": "#2563eb", "C": "#b9770e"}
+        sizes = 80 + 4.0 * to_numeric(d["median_pairs_per_session"]).fillna(0).clip(lower=0)
+
+        profile = lag_profile.copy()
+        if not profile.empty:
+            profile["row_key"] = profile["predictor"].astype(str) + " -> " + profile["target"].astype(str)
+        size_legend_vals: list[float] = []
+        if not profile.empty:
+            row_map = {row.row_label: idx for idx, row in enumerate(d.itertuples(index=False))}
+            profile["row_label"] = profile["predictor"].astype(str).map(lambda x: FEATURE_LABELS.get(x, x)) + " -> " + profile["target"].astype(str).map(lambda x: FEATURE_LABELS.get(x, x))
+            profile = profile.loc[profile["row_label"].isin(row_map)].copy()
+            profile["y"] = profile["row_label"].map(row_map)
+            profile = profile.sort_values(["y", "lag_minutes"]).reset_index(drop=True)
+            max_abs = max(0.2, float(to_numeric(profile["median_abs_spearman_r"]).max()))
+            size_scale = 30 + 280 * (to_numeric(profile["median_abs_spearman_r"]).fillna(0) / max_abs)
+            size_legend_vals = [round(max_abs * frac, 2) for frac in [0.33, 0.66, 1.0]]
+            for _, grp in profile.groupby("row_label", sort=False):
+                ax_lag.plot(
+                    to_numeric(grp["lag_minutes"]),
+                    grp["y"],
+                    color="#cbd5e1",
+                    lw=1.0,
+                    zorder=1,
+                )
+            sc = ax_lag.scatter(
+                to_numeric(profile["lag_minutes"]).fillna(0),
+                profile["y"],
+                s=size_scale,
+                c=to_numeric(profile["same_sign_fraction"]).fillna(0.0),
+                cmap="Blues",
+                vmin=0.5,
+                vmax=1.0,
+                alpha=0.95,
+                edgecolors="white",
+                linewidths=0.9,
+                zorder=2,
+            )
+            best = profile.loc[to_numeric(profile["is_best_lag"]).fillna(0).astype(int) == 1].copy()
+            if not best.empty:
+                ax_lag.scatter(
+                    to_numeric(best["lag_minutes"]).fillna(0),
+                    best["y"],
+                    s=(30 + 280 * (to_numeric(best["median_abs_spearman_r"]).fillna(0) / max_abs)) + 60,
+                    facecolors="none",
+                    edgecolors=[grade_colors.get(str(x), "#475569") for x in best["evidence_grade"]],
+                    linewidths=2.2,
+                    zorder=4,
+                )
+            cbar = plt.colorbar(sc, ax=ax_lag, fraction=0.03, pad=0.02)
+            cbar.set_label("Same-sign fraction")
+        else:
+            ax_lag.scatter(
+                to_numeric(d["best_lag_minutes"]).fillna(0),
+                y,
+                s=sizes,
+                c=[grade_colors.get(str(x), "#64748b") for x in d["evidence_grade"]],
+                alpha=0.92,
+                edgecolors="white",
+                linewidths=1.1,
+                zorder=3,
+            )
+        ax_lag.set_yticks(y)
+        ax_lag.set_yticklabels(d["row_label_wrapped"].astype(str), fontsize=9.3, linespacing=1.0)
+        ax_lag.set_xlabel("Tested lag window (min)")
+        ax_lag.set_xlim(-3, max(68, float(to_numeric(d["best_lag_minutes"]).max()) + 12))
+        ax_lag.grid(True, axis="x", alpha=0.2)
+        ax_lag.set_axisbelow(True)
+        ax_lag.spines["top"].set_visible(False)
+        ax_lag.spines["right"].set_visible(False)
+        lag_xmax = float(ax_lag.get_xlim()[1])
+        lag_xmin = float(ax_lag.get_xlim()[0])
+        for idx, row in enumerate(d.itertuples(index=False)):
+            label_x = float(row.best_lag_minutes) + 2.2
+            ha = "left"
+            if float(row.best_lag_minutes) >= 55 or label_x > lag_xmax - 9.5:
+                label_x = max(float(row.best_lag_minutes) - 3.0, lag_xmin + 11.5)
+                ha = "right"
+            ax_lag.text(
+                label_x,
+                idx,
+                f"best={int(row.best_lag_minutes)} min | grade {row.evidence_grade}",
+                ha=ha,
+                va="center",
+                fontsize=8.9,
+                color="#172033",
+                bbox={
+                    "boxstyle": "round,pad=0.18,rounding_size=0.1",
+                    "facecolor": "#ffffff",
+                    "edgecolor": "#e2e8f0",
+                    "linewidth": 0.7,
+                },
+            )
+
+        ax_strength.barh(y, d["median_abs_spearman_r"], color=[grade_colors.get(str(x), "#64748b") for x in d["evidence_grade"]], alpha=0.88, height=0.66)
+        strength_max = float(to_numeric(d["median_abs_spearman_r"]).max())
+        ax_strength.set_xlim(0, max(0.52, strength_max * 2.05))
+        ax_strength.set_xlabel("Median |Spearman r|")
+        ax_strength.grid(True, axis="x", alpha=0.18)
+        ax_strength.set_axisbelow(True)
+        ax_strength.spines["top"].set_visible(False)
+        ax_strength.spines["right"].set_visible(False)
+        ax_strength.spines["left"].set_visible(False)
+        ax_strength.tick_params(axis="y", left=False, labelleft=False)
+        for idx, row in enumerate(d.itertuples(index=False)):
+            ax_strength.text(
+                min(float(row.median_abs_spearman_r) + 0.018, ax_strength.get_xlim()[1] - 0.02),
+                idx,
+                f"r={float(row.median_spearman_r):.2f} | sign={float(row.same_sign_fraction):.2f}\nsess={int(row.n_sessions)}",
+                va="center",
+                fontsize=8.5,
+                color="#475569",
+                linespacing=1.04,
+                bbox={
+                    "boxstyle": "round,pad=0.16,rounding_size=0.1",
+                    "facecolor": "#ffffff",
+                    "edgecolor": "#e2e8f0",
+                    "linewidth": 0.7,
+                },
+            )
+
+        legend_handles = [
+            Patch(facecolor="#0f766e", edgecolor="none", label="Grade A"),
+            Patch(facecolor="#2563eb", edgecolor="none", label="Grade B"),
+            Patch(facecolor="#b9770e", edgecolor="none", label="Grade C"),
+        ]
+        self._place_topbar_legend(ax_lag, legend_handles, y=1.045)
+        if size_legend_vals:
+            size_handles = [
+                plt.scatter([], [], s=30 + 280 * (val / max(size_legend_vals)), color="#2563eb", alpha=0.8, edgecolors="white", linewidths=0.8, label=f"|r|={val:.2f}")
+                for val in size_legend_vals
+            ]
+            self._place_topbar_legend(ax_strength, size_handles, y=1.045)
+        fig._cltr_panel_notes = [
+            "Left|Lag sweep and best-retained timing|Each row shows the tested lag window for one driver-response pair. Marker size reflects median absolute lagged association, marker color shows same-sign fraction across sessions, and the outlined marker identifies the best retained lag with its evidence grade.",
+            "Right|Association strength and stability|Bars show median absolute lagged association, while the annotation reports signed median Spearman correlation, same-sign fraction across sessions, and the number of supporting sessions.",
+        ]
+        fig.subplots_adjust(left=0.28, right=0.985, top=0.87, bottom=0.12, wspace=0.18)
         return fig
 
     def _fig_cohort_agreement(self, agreement: pd.DataFrame):
@@ -4952,7 +7482,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             colors = d["eligible"].map({1: "#2563eb", 0: "#94a3b8"}).fillna("#94a3b8")
             ax.scatter(d["spearman_r"], d["mae"], c=colors, s=45, alpha=0.8)
             for _, row in d.iterrows():
-                ax.text(row["spearman_r"] if pd.notna(row["spearman_r"]) else 0, row["mae"] if pd.notna(row["mae"]) else 0, str(row["session_id"]), fontsize=7)
+                ax.text(row["spearman_r"] if pd.notna(row["spearman_r"]) else 0, row["mae"] if pd.notna(row["mae"]) else 0, str(row["session_id"]), fontsize=9)
             ax.axvline(0, color="#dbe4ee", lw=0.85, ls="--", zorder=0)
             ax.set_xlabel("Spearman r")
             ax.set_ylabel(f"{metric.replace('_', ' ').title()} MAE")
@@ -4962,18 +7492,29 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
         fig.tight_layout(rect=(0, 0, 1, 0.96))
         return fig
 
-    def _fig_cohort_primary_endpoints_raw(self, endpoints: pd.DataFrame):
+    def _fig_cohort_primary_endpoints_raw(self, endpoints: pd.DataFrame, metrics_override: list[str] | None = None):
         if endpoints.empty:
             return None
-        metrics = [m for m in ["thermal_comfort", "master_dpg_C", "indoor_air_velocity_mean_m_s", "biopac_temp_chest_mean_C", "empatica_hr_mean_bpm"] if m in endpoints["metric"].unique()]
+        preferred = [
+            "thermal_comfort",
+            "thermal_sensation",
+            "indoor_air_velocity_mean_m_s",
+            "empatica_eda_mean_uS",
+            "empatica_temp_mean_C",
+            "biopac_hr_mean_bpm",
+            "biopac_eda_mean_uS",
+            "biopac_temp_chest_mean_C",
+        ]
+        selected = metrics_override or preferred
+        metrics = [m for m in selected if m in endpoints["metric"].unique()]
         if not metrics:
             return None
         endpoints = endpoints.loc[endpoints["protocol_phase"].astype(str) != "acclimation"].copy()
         if endpoints.empty:
             return None
-        fig, axes = plt.subplots(len(metrics), 1, figsize=(self._figsize("wide_single")[0], 2.2 * len(metrics) + 0.6), sharex=True)
+        fig, axes = plt.subplots(len(metrics), 1, figsize=(self._figsize("wide_single")[0] + 0.6, 2.05 * len(metrics) + 0.9), sharex=True)
         panel_notes: list[str] = []
-        panel_positions = ["Top", "Upper middle", "Center", "Lower middle", "Bottom"]
+        panel_positions = ["Top", "Upper middle", "Center", "Lower middle", "Bottom", "Panel 6", "Panel 7", "Panel 8"]
         if len(metrics) == 1:
             axes = [axes]
         for ax, metric in zip(axes, metrics):
@@ -4981,53 +7522,92 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             if d.empty:
                 ax.axis("off")
                 continue
-            d["phase_condition"] = d["protocol_phase"].astype(str) + "\n" + d["condition_code"].astype(str)
+            d["phase_condition"] = d["protocol_phase"].astype(str).map(lambda x: PHASE_ABBR.get(str(x), str(x)[:3].upper())) + "\n" + d["condition_code"].astype(str)
             ax.bar(range(len(d)), d["mean_value"], color=[CONDITION_COLORS.get(str(x), "#475569") for x in d["condition_code"]])
-            ax.set_ylabel(FEATURE_LABELS.get(metric, metric))
+            ax.set_ylabel("")
+            ax.set_title(
+                f"{FEATURE_LABELS.get(metric, metric)} ({self._compact_axis_label(metric)})",
+                loc="left",
+                fontsize=10.5,
+                fontweight="bold",
+                color="#172033",
+                pad=8,
+            )
             panel_notes.append(f"{panel_positions[len(panel_notes)]} shows raw means for {FEATURE_LABELS.get(metric, metric)}.")
             ax.axhline(0, color="#dbe4ee", lw=0.85, ls="--", zorder=0)
             ax.grid(True, axis="y")
             self._apply_discrete_y_axis_matplotlib(ax, d["mean_value"], metric)
         axes[-1].set_xticks(range(len(d)))
-        axes[-1].set_xticklabels(list(d["phase_condition"]), rotation=45, ha="right")
+        axes[-1].set_xticklabels(list(d["phase_condition"]), rotation=90, ha="center", va="top")
         fig._cltr_panel_notes = panel_notes
-        fig.tight_layout(rect=(0, 0, 1, 0.96))
+        fig.tight_layout(rect=(0.03, 0.02, 0.99, 0.98))
         return fig
 
     def _fig_cohort_primary_endpoints(self, endpoints: pd.DataFrame):
         if endpoints.empty:
             return None
-        metrics = [m for m in ["thermal_comfort", "master_dpg_C", "indoor_air_velocity_mean_m_s", "biopac_temp_chest_mean_C", "empatica_hr_mean_bpm"] if m in endpoints["metric"].unique()]
+        preferred = [
+            "thermal_comfort",
+            "thermal_sensation",
+            "indoor_air_velocity_mean_m_s",
+            "empatica_eda_mean_uS",
+            "empatica_temp_mean_C",
+            "biopac_hr_mean_bpm",
+            "biopac_eda_mean_uS",
+            "biopac_temp_chest_mean_C",
+        ]
+        metrics = [m for m in preferred if m in endpoints["metric"].unique()]
         if not metrics:
             return None
         tmp = endpoints.loc[endpoints["metric"].isin(metrics) & (endpoints["protocol_phase"].astype(str) != "acclimation")].copy()
         if tmp.empty:
             return None
-        tmp["phase_condition"] = tmp["protocol_phase"].astype(str) + " | " + tmp["condition_code"].astype(str)
+        phase_sequence = [p for p in self._comparison_phase_sequence(tmp["protocol_phase"]) if str(p) != "acclimation"]
+        condition_sequence = [c for c in CONDITION_ORDER if c in set(tmp["condition_code"].astype(str))]
+        if not condition_sequence:
+            condition_sequence = sorted(tmp["condition_code"].astype(str).dropna().unique().tolist())
+        phase_order = {str(phase): idx for idx, phase in enumerate(phase_sequence)}
+        condition_order = {str(condition): idx for idx, condition in enumerate(condition_sequence)}
+        tmp["phase_condition"] = tmp["protocol_phase"].astype(str).map(lambda x: PHASE_ABBR.get(str(x), str(x)[:3].upper())) + "\n" + tmp["condition_code"].astype(str)
         pivot = tmp.pivot(index="metric", columns="phase_condition", values="mean_value")
         pivot = pivot.reindex(metrics)
+        ordered_columns = [
+            f"{PHASE_ABBR.get(str(phase), str(phase)[:3].upper())}\n{condition}"
+            for phase in phase_sequence
+            for condition in condition_sequence
+            if f"{PHASE_ABBR.get(str(phase), str(phase)[:3].upper())}\n{condition}" in pivot.columns
+        ]
+        if ordered_columns:
+            pivot = pivot.reindex(columns=ordered_columns)
         z = pivot.apply(lambda col: (col - col.mean()) / col.std(ddof=0) if col.notna().sum() > 1 and col.std(ddof=0) > 0 else col * 0, axis=1)
         fig, ax = plt.subplots(figsize=self._figsize("matrix"))
-        im = ax.imshow(z.values, aspect="equal", cmap="coolwarm", vmin=-2, vmax=2)
+        im = ax.imshow(z.values, aspect="auto", cmap="coolwarm", vmin=-2, vmax=2)
         ax.grid(False)
         ax.set_yticks(range(len(z.index)))
         ax.set_yticklabels([FEATURE_LABELS.get(x, x) for x in z.index])
         ax.set_xticks(range(len(z.columns)))
-        ax.set_xticklabels([x.replace(" | ", "\n") for x in z.columns], rotation=45, ha="right")
+        ax.set_xticklabels(list(z.columns), rotation=90, ha="center", va="top")
+        ax.set_xlabel("Phase And Condition")
+        for i in range(len(z.index)):
+            for j in range(len(z.columns)):
+                value = z.iloc[i, j]
+                if pd.notna(value):
+                    text_color = "#f8fafc" if abs(float(value)) >= 1.0 else "#172033"
+                    ax.text(j, i, f"{float(value):.1f}", ha="center", va="center", fontsize=8.5, color=text_color)
         plt.colorbar(im, ax=ax, shrink=0.8, label="Within-metric standardized mean")
-        fig.tight_layout(rect=(0, 0, 1, 0.96))
+        fig.tight_layout(rect=(0.03, 0.05, 0.99, 0.96))
         return fig
 
-    def _fig_cohort_exploratory_landscape(self, summary: pd.DataFrame, condition_support: pd.DataFrame):
+    def _fig_cohort_exploratory_landscape(self, summary: pd.DataFrame, condition_support: pd.DataFrame, feature_registry: pd.DataFrame | None = None):
         if summary.empty and condition_support.empty:
             return None
         fig, axes = plt.subplots(2, 2, figsize=(self._figsize("three_panel_row")[0], 8.8))
         axes = axes.ravel()
         panel_notes = [
-            "Top left shows the highest-support scientific features.",
-            "Top right shows the most variable supported features when available.",
-            "Bottom left shows average scientific coverage by domain.",
-            "Bottom right shows condition-level support balance.",
+            "Top left shows the derived features with the highest aligned support across the cohort.",
+            "Top right shows the most variable supported derived features when variability can be estimated reliably.",
+            "Bottom left shows the average aligned support fraction by feature domain.",
+            "Bottom right shows condition-level support balance across questionnaire, wearable, and indoor streams.",
         ]
         for ax in axes:
             ax.grid(True, axis="x")
@@ -5051,11 +7631,27 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
                 )
             else:
                 axes[1].axis("off")
-            domain = summary.groupby("domain").agg(
-                mean_coverage=("coverage_fraction", "mean"),
+            domain_source = summary.copy()
+            if feature_registry is not None and not feature_registry.empty:
+                registry_cols = ["feature", "prompt_response_fraction", "coverage_fraction"]
+                registry_view = feature_registry[[c for c in registry_cols if c in feature_registry.columns]].drop_duplicates(subset=["feature"]).copy()
+                domain_source = domain_source.merge(
+                    registry_view,
+                    on="feature",
+                    how="left",
+                    suffixes=("", "_registry"),
+                )
+                prompt_fraction = to_numeric(domain_source.get("prompt_response_fraction", pd.Series(dtype=float)))
+                minute_fraction = to_numeric(domain_source.get("coverage_fraction_registry", pd.Series(dtype=float)))
+                fallback_fraction = to_numeric(domain_source.get("coverage_fraction", pd.Series(dtype=float)))
+                domain_source["policy_support_fraction"] = prompt_fraction.where(prompt_fraction.notna(), minute_fraction.where(minute_fraction.notna(), fallback_fraction))
+            else:
+                domain_source["policy_support_fraction"] = to_numeric(domain_source.get("coverage_fraction", pd.Series(dtype=float)))
+            domain = domain_source.groupby("domain").agg(
+                mean_support=("policy_support_fraction", "mean"),
                 n_features=("feature", "count"),
             ).reset_index()
-            axes[2].bar(domain["domain"], domain["mean_coverage"], color="#0f766e")
+            axes[2].bar(domain["domain"], domain["mean_support"], color="#0f766e")
             axes[2].set_ylim(0, 1)
             axes[2].tick_params(axis="x", rotation=30)
         else:
@@ -5066,14 +7662,14 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             cond = condition_support.copy()
             x = np.arange(len(cond))
             width = 0.18
-            axes[3].bar(x - 1.5 * width, cond.get("questionnaire_completeness__mean", pd.Series([np.nan] * len(cond))), width=width, label="Questionnaire", color="#111827")
-            axes[3].bar(x - 0.5 * width, cond.get("empatica_fraction__mean", pd.Series([np.nan] * len(cond))), width=width, label="Empatica", color="#2563eb")
-            axes[3].bar(x + 0.5 * width, cond.get("biopac_fraction__mean", pd.Series([np.nan] * len(cond))), width=width, label="BIOPAC", color="#dc2626")
-            axes[3].bar(x + 1.5 * width, cond.get("indoor_fraction__mean", pd.Series([np.nan] * len(cond))), width=width, label="Indoor", color="#059669")
+            axes[3].bar(x - 1.5 * width, cond.get("questionnaire_completeness__mean", pd.Series([np.nan] * len(cond))), width=width, label="Questionnaire event support", color="#111827")
+            axes[3].bar(x - 0.5 * width, cond.get("empatica_fraction__mean", pd.Series([np.nan] * len(cond))), width=width, label="Empatica signal coverage", color="#2563eb")
+            axes[3].bar(x + 0.5 * width, cond.get("biopac_fraction__mean", pd.Series([np.nan] * len(cond))), width=width, label="BIOPAC signal coverage", color="#dc2626")
+            axes[3].bar(x + 1.5 * width, cond.get("indoor_fraction__mean", pd.Series([np.nan] * len(cond))), width=width, label="Indoor sensor coverage", color="#059669")
             axes[3].set_xticks(x)
             axes[3].set_xticklabels(cond["condition_code"], rotation=30, ha="right")
             axes[3].set_ylim(0, 1)
-            axes[3].legend(frameon=False, fontsize=8)
+            axes[3].legend(frameon=False, fontsize=9.5, ncol=4, loc="upper center", bbox_to_anchor=(0.5, 1.12), columnspacing=1.4, handletextpad=0.6)
         else:
             axes[3].axis("off")
         fig._cltr_panel_notes = panel_notes
@@ -5100,6 +7696,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             pivot = pivot.loc[pivot.max(axis=1).sort_values(ascending=False).index]
             im = axes[0].imshow(pivot.values, aspect="equal", cmap="YlOrRd", vmin=0, vmax=max(0.5, float(np.nanmax(pivot.values)) if pivot.size else 0.5))
             axes[0].grid(False)
+            axes[0].text(0.01, 0.98, "Recurring cohort motifs", transform=axes[0].transAxes, ha="left", va="top", fontsize=11, fontweight="bold", color="#172033")
             axes[0].set_yticks(range(len(pivot.index)))
             axes[0].set_yticklabels([FEATURE_LABELS.get(x, x) for x in pivot.index])
             axes[0].set_xticks(range(len(pivot.columns)))
@@ -5108,7 +7705,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
                 for xi, pattern in enumerate(pivot.columns):
                     val = float(pivot.loc[metric, pattern])
                     if val > 0:
-                        axes[0].text(xi, yi, f"{val:.2f}", ha="center", va="center", fontsize=7.5, color="#3f2a0a")
+                        axes[0].text(xi, yi, f"{val:.2f}", ha="center", va="center", fontsize=9.5, color="#3f2a0a")
             plt.colorbar(im, ax=axes[0], shrink=0.8, label="Share of sessions within metric")
         else:
             axes[0].axis("off")
@@ -5122,6 +7719,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             top_sessions = display_inventory.sort_values(["pattern_strength", "abs_delta"], ascending=[False, False]).head(8).copy()
             labels = [f"{row.session_id}\n{FEATURE_LABELS.get(row.metric, row.metric)}" for row in top_sessions.itertuples()]
             axes[1].barh(labels[::-1], top_sessions["pattern_strength"][::-1], color="#7c3aed")
+            axes[1].text(0.01, 0.98, "Strongest session-level motifs", transform=axes[1].transAxes, ha="left", va="top", fontsize=11, fontweight="bold", color="#172033")
             for idx, row in enumerate(top_sessions.iloc[::-1].itertuples()):
                 baseline_info = {
                     "phase": "acclimation" if self._uses_acc_assumption(str(row.metric)) and str(row.baseline_phase) != "acclimation" else str(row.baseline_phase),
@@ -5133,12 +7731,225 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
                     idx,
                     f"base={self._baseline_phase_abbr(baseline_info)} | {PHASE_ABBR.get(row.dominant_phase, row.dominant_phase[:3].upper())} {row.direction} | c={row.consistency:.2f}",
                     va="center",
-                    fontsize=8,
+                    fontsize=10,
                     color="#475569",
                 )
         else:
             axes[1].axis("off")
         fig.tight_layout(rect=(0, 0, 1, 0.96))
+        return fig
+
+    def _fig_cohort_participant_profile_atlas(self, profiles: pd.DataFrame):
+        if profiles.empty:
+            return None
+        metrics = [
+            "thermal_comfort",
+            "empatica_hr_mean_bpm",
+            "biopac_temp_chest_mean_C",
+            "master_dpg_C",
+        ]
+        metrics = [metric for metric in metrics if metric in profiles.columns]
+        if not metrics:
+            return None
+        participants = sorted(profiles["participant_id"].astype(str).unique().tolist())
+        conditions = [cond for cond in CONDITION_ORDER if cond in profiles["condition_code"].astype(str).unique()]
+        fig, axes = plt.subplots(2, 2, figsize=(13.4, 9.2))
+        axes = axes.ravel()
+        panel_notes: list[str] = []
+        panel_positions = ["Top left", "Top right", "Bottom left", "Bottom right"]
+        for ax, metric in zip(axes, metrics):
+            pivot = profiles.pivot_table(index="participant_id", columns="condition_code", values=metric, aggfunc="mean")
+            pivot = pivot.reindex(index=participants, columns=conditions)
+            values = pivot.to_numpy(dtype=float)
+            im = ax.imshow(values, aspect="auto", cmap="coolwarm")
+            ax.grid(False)
+            ax.text(0.01, 0.98, FEATURE_LABELS.get(metric, metric), transform=ax.transAxes, ha="left", va="top", fontsize=11, fontweight="bold", color="#172033")
+            ax.set_xticks(range(len(conditions)))
+            ax.set_xticklabels(conditions, rotation=30, ha="right")
+            step = max(1, len(participants) // 10)
+            yticks = list(range(0, len(participants), step))
+            ax.set_yticks(yticks)
+            ax.set_yticklabels([participants[idx] for idx in yticks])
+            ax.set_xlabel("Experimental Condition")
+            ax.set_ylabel("Participant")
+            plt.colorbar(im, ax=ax, shrink=0.82, label=self._axis_label(metric))
+            panel_notes.append(f"{panel_positions[len(panel_notes)]} shows participant-by-condition heterogeneity for {FEATURE_LABELS.get(metric, metric)}.")
+        for ax in axes[len(metrics):]:
+            ax.axis("off")
+        fig._cltr_panel_notes = panel_notes
+        fig.tight_layout(rect=(0, 0, 1, 0.96))
+        return fig
+
+    def _fig_cohort_modeling_overview(self, contrasts: pd.DataFrame, mixed: pd.DataFrame, benchmarks: pd.DataFrame):
+        if contrasts.empty and mixed.empty:
+            return None
+        fig, axes = plt.subplots(
+            2,
+            1,
+            figsize=(16.4, 10.0),
+            gridspec_kw={"height_ratios": [1.35, 2.05]},
+        )
+        panel_notes = [
+            "Top|Contrast evidence by family|Corrected contrast evidence summarized jointly as burden, breadth, and contributing endpoint identity. Bar length shows the number of Benjamini-Hochberg-significant contrasts, and the annotation reports both the number of contributing endpoints and their names. Table 5.6 gives the strongest-hit rows and Table 5.7 gives the balanced breadth view.",
+            "Middle|Mixed-effects evidence profile|Endpoint-level evidence profile shown as a swimlane plot. Each retained marker shows one effect class that survives Benjamini-Hochberg correction for that endpoint, marker size and color reflect evidence strength, and the adjacent callout lists the retained term labels. Table 5.8 provides the coefficient-level interpretation and Table 5.9 gives fit warnings.",
+        ]
+        contrast_ax, mixed_ax = axes
+        def _empty_panel(ax, title: str, message: str) -> None:
+            ax.set_xticks([])
+            ax.set_yticks([])
+            for spine in ax.spines.values():
+                spine.set_visible(False)
+            ax.set_facecolor("#f8fafc")
+            ax.text(0.5, 0.5, message, transform=ax.transAxes, ha="center", va="center", fontsize=10.5, color="#475569", wrap=True)
+        if not contrasts.empty:
+            keep = contrasts.copy()
+            if "significant_fdr" in keep.columns:
+                keep = keep.loc[keep["significant_fdr"] == 1].copy()
+            if not keep.empty:
+                keep["contrast_family"] = keep["metric"].map(self._contrast_family)
+                keep["endpoint_label"] = keep["metric"].map(lambda x: FEATURE_LABELS.get(str(x), str(x).replace("_", " ")))
+                summary = (
+                    keep.groupby("contrast_family")
+                    .agg(
+                        n_contrasts=("metric", "size"),
+                        n_metrics=("metric", "nunique"),
+                        endpoint_labels=("endpoint_label", lambda s: sorted({str(x) for x in s if str(x).strip()})),
+                    )
+                    .sort_values(["n_contrasts", "n_metrics"], ascending=[True, True])
+                    .reset_index()
+                )
+                labels = summary["contrast_family"].astype(str).tolist()
+                values = summary["n_contrasts"].to_numpy(dtype=float)
+                contrast_ax.barh(labels, values, color="#2563eb", alpha=0.9, height=0.72)
+                contrast_ax.set_xlabel("Number of BH-significant contrasts", labelpad=10)
+                contrast_ax.set_xlim(0, max(values.max() * 3.2, 26))
+                contrast_ax.grid(True, axis="x", alpha=0.18)
+                contrast_ax.set_axisbelow(True)
+                contrast_ax.spines["top"].set_visible(False)
+                contrast_ax.spines["right"].set_visible(False)
+                for idx, row in enumerate(summary.itertuples(index=False)):
+                    endpoints_text = fill(", ".join(row.endpoint_labels), width=84)
+                    contrast_ax.text(
+                        float(row.n_contrasts) + 0.35,
+                        idx,
+                        f"{int(row.n_contrasts)} contrasts | {int(row.n_metrics)} endpoints\n{endpoints_text}",
+                        va="center",
+                        fontsize=10.0,
+                        color="#475569",
+                        linespacing=1.12,
+                        bbox={
+                            "boxstyle": "round,pad=0.28,rounding_size=0.12",
+                            "facecolor": "#ffffff",
+                            "edgecolor": "#e2e8f0",
+                            "linewidth": 0.8,
+                        },
+                        clip_on=False,
+                    )
+            else:
+                _empty_panel(contrast_ax, "Contrast evidence by family", "No Benjamini-Hochberg-significant condition contrasts were retained for this cohort run.")
+        else:
+            _empty_panel(contrast_ax, "Contrast evidence by family", "No eligible cohort contrast results were available for this cohort run.")
+        if not mixed.empty:
+            keep = self._mixed_effects_fixed_only(mixed)
+            if "significant_fdr" in keep.columns:
+                keep = keep.loc[keep["significant_fdr"] == 1].copy()
+            if not keep.empty:
+                matrix_cols = ["Phase", "Light", "Time", "Interaction"]
+                rows = []
+                class_match = {
+                    "Phase": "protocol_phase",
+                    "Light": "illuminance_level",
+                    "Time": "time_of_day",
+                    "Interaction": ":",
+                }
+                for metric, d in keep.groupby("metric"):
+                    label = FEATURE_LABELS.get(metric, metric)
+                    for effect_class, token in class_match.items():
+                        if effect_class == "Interaction":
+                            class_df = d.loc[d["term"].astype(str).str.contains(token, regex=False)].copy()
+                        else:
+                            class_df = d.loc[d["term"].astype(str).str.contains(token, regex=False) & ~d["term"].astype(str).str.contains(":", regex=False)].copy()
+                        if class_df.empty:
+                            continue
+                        strongest_q = float(to_numeric(class_df["p_value_fdr"]).min())
+                        strongest_strength = float(np.clip(-np.log10(max(strongest_q, 1e-300)), 0, 12))
+                        term_text = self._mixed_effect_term_tokens(class_df["term"].astype(str).tolist())
+                        rows.append(
+                            {
+                                "metric": metric,
+                                "label": label,
+                                "effect_class": effect_class,
+                                "strength": strongest_strength,
+                                "term_text": term_text,
+                            }
+                        )
+                profile = pd.DataFrame(rows)
+                endpoint_order = profile.groupby("label")["strength"].max().sort_values(ascending=False).index.tolist()
+                y_map = {label: idx for idx, label in enumerate(endpoint_order)}
+                x_map = {name: idx for idx, name in enumerate(matrix_cols)}
+                profile["x"] = profile["effect_class"].map(x_map)
+                profile["y"] = profile["label"].map(y_map)
+                cmap = LinearSegmentedColormap.from_list("mixed_profile", ["#cbd5e1", "#a78bfa", "#7c3aed", "#4c1d95"])
+                vmax = max(6.0, float(profile["strength"].max()))
+                mixed_ax.set_xlim(-0.65, len(matrix_cols) - 0.1)
+                mixed_ax.set_ylim(len(endpoint_order) - 0.5, -0.5)
+                mixed_ax.set_xticks(range(len(matrix_cols)))
+                mixed_ax.set_xticklabels(matrix_cols, rotation=0, ha="center", fontsize=10.5, fontweight="bold")
+                mixed_ax.set_yticks(range(len(endpoint_order)))
+                mixed_ax.set_yticklabels(endpoint_order, fontsize=10.2)
+                mixed_ax.set_xlabel("Retained BH-significant mixed-effects evidence class", labelpad=10)
+                for yi in range(len(endpoint_order)):
+                    mixed_ax.hlines(yi, -0.45, len(matrix_cols) - 0.55, color="#e2e8f0", lw=1.4, zorder=0)
+                for xi in range(len(matrix_cols)):
+                    mixed_ax.axvline(xi, color="#f1f5f9", lw=0.8, zorder=0)
+                sizes = 280 + 85 * profile["strength"].clip(lower=0.5)
+                sc = mixed_ax.scatter(
+                    profile["x"],
+                    profile["y"],
+                    s=sizes,
+                    c=profile["strength"],
+                    cmap=cmap,
+                    vmin=0,
+                    vmax=vmax,
+                    edgecolors="white",
+                    linewidths=1.6,
+                    zorder=3,
+                )
+                mixed_ax.spines["top"].set_visible(False)
+                mixed_ax.spines["right"].set_visible(False)
+                mixed_ax.spines["left"].set_visible(False)
+                mixed_ax.spines["bottom"].set_visible(False)
+                for idx, row in enumerate(profile.itertuples(index=False)):
+                    offset = 0.24 if idx % 2 == 0 else -0.24
+                    ha = "left" if offset > 0 else "right"
+                    mixed_ax.text(
+                        float(row.x) + offset,
+                        float(row.y),
+                        str(row.term_text),
+                        ha=ha,
+                        va="center",
+                        fontsize=7.6,
+                        color="#1e293b",
+                        fontweight="bold",
+                        linespacing=1.0,
+                        bbox={
+                            "boxstyle": "round,pad=0.22,rounding_size=0.12",
+                            "facecolor": "#ffffff",
+                            "edgecolor": "#cbd5e1",
+                            "linewidth": 0.9,
+                        },
+                        zorder=4,
+                    )
+                mixed_ax.tick_params(axis="y", length=0)
+                mixed_ax.tick_params(axis="x", length=0)
+                cbar = plt.colorbar(sc, ax=mixed_ax, fraction=0.03, pad=0.02)
+                cbar.set_label("Strongest retained evidence (-log10 BH q)")
+            else:
+                _empty_panel(mixed_ax, "Mixed-effects evidence class", "No Benjamini-Hochberg-significant mixed-effects fixed terms were retained for this cohort run.")
+        else:
+            _empty_panel(mixed_ax, "Mixed-effects evidence class", "No eligible mixed-effects primary models were available for this cohort run.")
+        fig._cltr_panel_notes = panel_notes
+        fig.tight_layout(rect=(0.02, 0.01, 0.995, 0.985))
         return fig
 
     def _fig_cohort_associations(self, associations: pd.DataFrame):
@@ -5172,6 +7983,11 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             "Center|Median Spearman correlation|Median Spearman correlation.",
             "Right|Median mean absolute error|Median mean absolute error.",
         ]
+        ylabels = {
+            "median_overlap_minutes": "Median Overlap Duration (min)",
+            "median_spearman_r": "Median Spearman Correlation (r)",
+            "median_mae": "Median Mean Absolute Error",
+        }
         for ax, col, title in zip(axes, ["median_overlap_minutes", "median_spearman_r", "median_mae"], ["Median overlap", "Median Spearman r", "Median MAE"]):
             vals = []
             colors = []
@@ -5180,6 +7996,10 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
                 vals.append(float(row[col].iloc[0]) if not row.empty and pd.notna(row[col].iloc[0]) else np.nan)
                 colors.append("#2563eb" if not row.empty and row["summary_status"].iloc[0] == "eligible" else "#94a3b8")
             ax.bar(metrics, vals, color=colors)
+            ax.set_xlabel("Directly Comparable Modality Pair")
+            ax.set_ylabel(ylabels.get(col, title))
+            ax.set_xticks(range(len(metrics)))
+            ax.set_xticklabels(["Heart Rate", "EDA", "Temperature"], rotation=0)
         fig._cltr_panel_notes = panel_notes
         fig.tight_layout(rect=(0, 0, 1, 0.96))
         return fig
@@ -5207,7 +8027,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
         ax.set_yticklabels([FEATURE_LABELS.get(x.replace("__mean", ""), x) for x in z.index])
         ax.set_xticks(range(len(z.columns)))
         ax.set_xticklabels(self._phase_condition_ticklabels(list(z.columns)), rotation=0, ha="center")
-        ax.tick_params(axis="x", labelsize=8, pad=8)
+        ax.tick_params(axis="x", labelsize=10, pad=8)
         cb = plt.colorbar(im, cax=cax, orientation="horizontal")
         cb.set_label("z score")
         fig.tight_layout(rect=(0, 0, 1, 0.96))
@@ -5228,7 +8048,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
                     ax.axis("off")
                     continue
                 ax.bar(d["condition_code"], d[metric], color=[CONDITION_COLORS.get(str(x), "#475569") for x in d["condition_code"]])
-                ax.set_ylabel(FEATURE_LABELS.get(metric, metric))
+                ax.set_ylabel(self._axis_label(metric))
                 ax.tick_params(axis="x", rotation=45)
             fig._cltr_panel_notes = [
                 f"{['Left','Center','Right'][idx]}|{FEATURE_LABELS.get(metric, metric)} by condition|{FEATURE_LABELS.get(metric, metric)} by condition."
@@ -5253,7 +8073,7 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             ax.set_xticklabels(pivot.columns, rotation=45, ha="right")
             ax.set_yticks(range(len(pivot.index)))
             ax.set_yticklabels(pivot.index)
-            ax.set_ylabel(FEATURE_LABELS.get(metric, metric))
+            ax.set_ylabel(self._axis_label(metric))
             plt.colorbar(im, ax=ax, shrink=0.8)
         fig._cltr_panel_notes = [
             f"{['Left','Right'][idx]}|Participant-by-condition variation for {FEATURE_LABELS.get(metric, metric)}|Participant-by-condition variation for {FEATURE_LABELS.get(metric, metric)}."
@@ -5301,31 +8121,30 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             obs.append("The cohort is large enough for full cross-session comparisons.")
         else:
             obs.append(f"This summary is based on `{int(sample['n_sessions'])}` sessions from `{int(sample['n_participants'])}` participants, so the results should be read as directional rather than definitive.")
-        exploratory = c.get("exploratory_feature_summary", pd.DataFrame())
-        if not exploratory.empty:
-            exploratory = exploratory.loc[~exploratory["feature"].astype(str).str.startswith("support_")].copy()
-            top_coverage = exploratory.sort_values(["coverage_fraction", "n_non_null"], ascending=[False, False]).head(3)
-            obs.append("The strongest data coverage appears in " + ", ".join(FEATURE_LABELS.get(row.feature, row.feature) for row in top_coverage.itertuples()) + ".")
-        patterns = c.get("pattern_summary", pd.DataFrame())
-        if not patterns.empty:
-            top_pattern = patterns.iloc[0]
-            obs.append(
-                f"Most recurrent pattern is {FEATURE_LABELS.get(top_pattern['metric'], top_pattern['metric'])} during {top_pattern['dominant_phase']} with a {top_pattern['direction']} direction across {top_pattern['n_sessions']} sessions."
-            )
-        agreement = c["sensor_agreement"]
-        hr = agreement.loc[(agreement["metric"] == "heart_rate") & (agreement["eligible"] == 1), "spearman_r"].dropna()
-        if not hr.empty:
-            obs.append(f"Median eligible heart-rate agreement is `{hr.median():.2f}`.")
-        else:
-            obs.append("No eligible heart-rate agreement rows are available yet.")
         signal_audit = c.get("signal_audit_summary", pd.DataFrame())
         if not signal_audit.empty:
+            inventory = self._device_stream_inventory_register(c.get("cohort_minute_features", pd.DataFrame()), signal_audit)
             primary = signal_audit.loc[signal_audit["recommended_role"].astype(str).isin(["primary", "primary_with_qc"]), "signal_stream"].astype(str).tolist()
             limited = signal_audit.loc[signal_audit["recommended_role"].astype(str).isin(["secondary_only", "secondary_validation", "subset_only", "not_primary", "not_recommended"]), "signal_stream"].astype(str).tolist()
+            if not inventory.empty:
+                obs.append(
+                    f"The current cohort export catalogs `{len(inventory)}` Empatica/BIOPAC streams, of which `{int(signal_audit['signal_stream'].nunique())}` currently enter the formal signal audit."
+                )
+                comparable_n = int((inventory["comparison_class"] == "directly_comparable").sum())
+                non_comparable_n = int(len(inventory) - comparable_n)
+                obs.append(
+                    f"`{comparable_n}` streams belong to directly comparable Empatica/BIOPAC pairs, while `{non_comparable_n}` streams are device-specific, same-construct-but-unpaired, or source-only."
+                )
             if primary:
                 obs.append("Primary device streams in this release are " + ", ".join(self._fmt_cell(x) for x in primary) + ".")
             if limited:
-                obs.append("Limited or secondary-use streams are " + ", ".join(self._fmt_cell(x) for x in limited[:4]) + ".")
+                obs.append("Limited, subset-only, or secondary-use streams include " + ", ".join(self._fmt_cell(x) for x in limited[:6]) + ".")
+        else:
+            exploratory = c.get("exploratory_feature_summary", pd.DataFrame())
+            if not exploratory.empty:
+                exploratory = exploratory.loc[~exploratory["feature"].astype(str).str.startswith("support_")].copy()
+                top_coverage = exploratory.sort_values(["coverage_fraction", "n_non_null"], ascending=[False, False]).head(3)
+                obs.append("The strongest data coverage appears in " + ", ".join(FEATURE_LABELS.get(row.feature, row.feature) for row in top_coverage.itertuples()) + ".")
         return obs[:4]
 
     def _phase_delta_map(self, phase: pd.DataFrame) -> dict[str, dict]:
@@ -5517,14 +8336,39 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             intro_sections=self._session_stage_sections(session_inputs, phase, meta),
             section_intro_map=self._session_section_intros(),
             doc_kind="session",
+            middle_menu_button_id="sessionMenuButton",
+            middle_menu_panel_id="sessionMenuPanel",
+            middle_menu_label="Sessions",
+            middle_menu_title="Sessions",
+            middle_menu_items_html="<a href='../../sessions_report.html'>Sessions Report<span>Dedicated session browser and participant-level reports</span></a>",
+            secondary_menu_button_id="chapterMenuButton",
+            secondary_menu_panel_id="chapterMenuPanel",
+            secondary_menu_label="Chapters",
+            secondary_menu_title="Cohort Chapters",
+            secondary_menu_items_html=self._cohort_chapter_menu_items_html("../../cohort/"),
         )
 
     def _cohort_html(self, cohort_inputs: dict, narrative_specs: list[dict], appendix_specs: list[dict]) -> str:
         sample = cohort_inputs["sample_status"].iloc[0]
+        signal_audit = cohort_inputs.get("signal_audit_summary", pd.DataFrame())
+        catalogued_streams = len(DEVICE_STREAM_CATALOG)
+        audited_streams = int(signal_audit["signal_stream"].nunique()) if not signal_audit.empty else 0
+        comparable_stream_families = int(cohort_inputs["agreement_summary"]["metric"].nunique()) if not cohort_inputs.get("agreement_summary", pd.DataFrame()).empty else 0
+        chapter_specs = self._cohort_chapter_specs(cohort_inputs, narrative_specs, appendix_specs)
+        chapter_menu_items_html = "".join(
+            f"<a href='{html_escape(chapter['filename'])}'>{html_escape(chapter['title'].split(':')[-1].strip())}<span>{html_escape(chapter['subtitle'])}</span></a>"
+            for chapter in chapter_specs
+        )
+        sessions_menu_items_html = (
+            "<a href='../sessions_report.html'>Sessions Report<span>Dedicated session browser and participant-level reports</span></a>"
+        )
         cards = [
             ("Sessions", int(sample["n_sessions"])),
             ("Participants", int(sample["n_participants"])),
             ("Comparison readiness", "full" if int(sample["cohort_inference_eligible"]) else "limited"),
+            ("Catalogued streams", catalogued_streams),
+            ("Signal-audited streams", audited_streams),
+            ("Comparable stream families", comparable_stream_families),
             ("Comparable agreement records", int((cohort_inputs["sensor_agreement"]["eligible"] == 1).sum()) if not cohort_inputs["sensor_agreement"].empty else 0),
             ("Comparable condition pairs", int((cohort_inputs["condition_contrasts"]["eligible"] == 1).sum()) if not cohort_inputs["condition_contrasts"].empty else 0),
             ("FDR-significant contrasts", int((cohort_inputs["condition_contrasts"].get("significant_fdr", pd.Series(dtype=int)) == 1).sum()) if not cohort_inputs["condition_contrasts"].empty else 0),
@@ -5541,7 +8385,282 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
             intro_sections=self._cohort_stage_sections(cohort_inputs),
             section_intro_map=self._cohort_section_intros(cohort_inputs),
             doc_kind="cohort",
+            middle_menu_button_id="sessionMenuButton",
+            middle_menu_panel_id="sessionMenuPanel",
+            middle_menu_label="Sessions",
+            middle_menu_title="Sessions",
+            middle_menu_items_html=sessions_menu_items_html,
+            secondary_menu_button_id="chapterMenuButton",
+            secondary_menu_panel_id="chapterMenuPanel",
+            secondary_menu_label="Chapters",
+            secondary_menu_title="Cohort Chapters",
+            secondary_menu_items_html=chapter_menu_items_html,
         )
+
+    def _cohort_cards(self, cohort_inputs: dict) -> list[tuple[str, object]]:
+        sample = cohort_inputs["sample_status"].iloc[0]
+        signal_audit = cohort_inputs.get("signal_audit_summary", pd.DataFrame())
+        catalogued_streams = len(DEVICE_STREAM_CATALOG)
+        audited_streams = int(signal_audit["signal_stream"].nunique()) if not signal_audit.empty else 0
+        comparable_stream_families = int(cohort_inputs["agreement_summary"]["metric"].nunique()) if not cohort_inputs.get("agreement_summary", pd.DataFrame()).empty else 0
+        return [
+            ("Sessions", int(sample["n_sessions"])),
+            ("Participants", int(sample["n_participants"])),
+            ("Comparison readiness", "full" if int(sample["cohort_inference_eligible"]) else "limited"),
+            ("Catalogued streams", catalogued_streams),
+            ("Signal-audited streams", audited_streams),
+            ("Comparable stream families", comparable_stream_families),
+            ("Comparable agreement records", int((cohort_inputs["sensor_agreement"]["eligible"] == 1).sum()) if not cohort_inputs["sensor_agreement"].empty else 0),
+            ("Comparable condition pairs", int((cohort_inputs["condition_contrasts"]["eligible"] == 1).sum()) if not cohort_inputs["condition_contrasts"].empty else 0),
+            ("FDR-significant contrasts", int((cohort_inputs["condition_contrasts"].get("significant_fdr", pd.Series(dtype=int)) == 1).sum()) if not cohort_inputs["condition_contrasts"].empty else 0),
+            ("Benchmark tasks", int(cohort_inputs["predictive_benchmarks"]["task"].nunique()) if not cohort_inputs.get("predictive_benchmarks", pd.DataFrame()).empty else 0),
+            ("Minute-level records", len(cohort_inputs["cohort_minute_features"])),
+        ]
+
+    def _chapter_observations(self, cohort_inputs: dict, specs: list[dict]) -> list[str]:
+        tags = {str(tag) for spec in specs for tag in spec.get("tags", [])}
+        observations: list[str] = []
+        if {"overview", "qc", "support"} & tags:
+            observations.extend(self._cohort_observations(cohort_inputs))
+        if {"comfort", "fan"} & tags:
+            observations.extend(
+                [
+                    "This chapter isolates subjective observations and behavioral-control channels before they are reduced into support-gated cohort endpoints.",
+                    "Questionnaire figures remain descriptive and event-based, while fan channels provide behavioral context for later environmental and comfort interpretation.",
+                ]
+            )
+        if {"heart_rate", "eda", "temperature", "bloodflow", "optical", "bvp", "motion", "activity"} & tags:
+            signal_audit = cohort_inputs.get("signal_audit_summary", pd.DataFrame())
+            if not signal_audit.empty:
+                primary = signal_audit.loc[signal_audit["recommended_role"].astype(str).isin(["primary", "primary_with_qc"]), "signal_stream"].astype(str).tolist()
+                limited = signal_audit.loc[~signal_audit["recommended_role"].astype(str).isin(["primary", "primary_with_qc"]), "signal_stream"].astype(str).tolist()
+                observations.extend(
+                    [
+                        "This chapter groups the audited Empatica and BIOPAC physiological streams before endpoint reduction or relationship screening.",
+                        "Primary or QC-qualified physiological streams are " + ", ".join(self._fmt_cell(x) for x in primary[:8]) + ".",
+                        "Limited physiological streams include " + ", ".join(self._fmt_cell(x) for x in limited[:6]) + "." if limited else "All displayed physiological streams currently retain at least QC-qualified support.",
+                    ]
+                )
+        if {"environment"} & tags:
+            observations.extend(
+                [
+                    "Environmental figures are separated from physiology so room forcing and ambient context can be inspected without being conflated with body-signal changes.",
+                    "These traces are descriptive protocol-context views and should be read alongside support density and condition balance.",
+                ]
+            )
+        if {"statistics", "matrix", "manuscript"} & tags:
+            observations.extend(
+                [
+                    "This chapter contains the support-gated cohort result layer and the audit registers that determine which endpoints remain scientifically defensible.",
+                    "Use the scenario and claim registers here before promoting any matrix or model output into manuscript evidence.",
+                ]
+            )
+        if {"relationships", "agreement"} & tags:
+            observations.extend(
+                [
+                    "This chapter separates all-source audit relationships from valid-only claim-supporting relationships.",
+                    "Device-agreement figures here are technical validation summaries, not scientific associations between constructs.",
+                ]
+            )
+        deduped: list[str] = []
+        for item in observations:
+            text = str(item).strip()
+            if text and text not in deduped:
+                deduped.append(text)
+        return deduped[:4]
+
+    def _cohort_chapter_specs(self, cohort_inputs: dict, narrative_specs: list[dict], appendix_specs: list[dict]) -> list[dict]:
+        all_specs = narrative_specs + appendix_specs
+        intro_map = self._cohort_section_intros(cohort_inputs)
+        chapters = [
+            {
+                "slug": "ch01_overview_audit",
+                "chapter_number": 1,
+                "filename": "cohort_ch01_overview_audit.html",
+                "title": "CLTR Cohort Report: Chapter 1",
+                "subtitle": "Study overview and audit registers",
+                "description": "The governing chapter for the cohort suite: study coverage, stream inventory, signal-support decisions, comparability classes, scenario definitions, and claim gates.",
+                "focus_label": "Audit backbone",
+                "sections": ["frontmatter"],
+                "intro_sections": self._cohort_stage_sections(cohort_inputs),
+                "section_intro_map": {},
+            },
+            {
+                "slug": "ch02_subjective_behavioral",
+                "chapter_number": 2,
+                "filename": "cohort_ch02_subjective_behavioral.html",
+                "title": "CLTR Cohort Report: Chapter 2",
+                "subtitle": "Subjective and behavioral data",
+                "description": "Comfort, preference, and fan-control views shown as their own evidence family before being blended into derived cohort endpoints or cross-modal interpretations.",
+                "focus_label": "Participant response",
+                "sections": ["subjective_behavioral"],
+                "intro_sections": "",
+                "section_intro_map": {"subjective_behavioral": intro_map.get("subjective_behavioral", "")},
+            },
+            {
+                "slug": "ch03_physiological",
+                "chapter_number": 3,
+                "filename": "cohort_ch03_physiological.html",
+                "title": "CLTR Cohort Report: Chapter 3",
+                "subtitle": "Physiological data",
+                "description": "The full Empatica and BIOPAC body-signal gallery, including audited HR, EDA, temperature, motion, vascular, and optical streams with scenario-aware physiological views.",
+                "focus_label": "Wearables + BIOPAC",
+                "sections": ["physiological"],
+                "intro_sections": "",
+                "section_intro_map": {"physiological": intro_map.get("physiological", "")},
+            },
+            {
+                "slug": "ch04_environmental",
+                "chapter_number": 4,
+                "filename": "cohort_ch04_environmental.html",
+                "title": "CLTR Cohort Report: Chapter 4",
+                "subtitle": "Environmental data",
+                "description": "Ambient and forcing context isolated from physiology so room dynamics can be inspected on their own before causal or relational interpretation is attempted.",
+                "focus_label": "Context signals",
+                "sections": ["environmental"],
+                "intro_sections": "",
+                "section_intro_map": {"environmental": intro_map.get("environmental", "")},
+            },
+            {
+                "slug": "ch05_derived_results",
+                "chapter_number": 5,
+                "filename": "cohort_ch05_derived_results.html",
+                "title": "CLTR Cohort Report: Chapter 5",
+                "subtitle": "Policy-Gated Scientific Results and Modeling",
+                "description": "A scientific-results layer governed by explicit support, quality, modality, and robustness gates: aligned master-table readiness, feature registry, support-screened result matrices, inferential contrasts, mixed-effects estimates, predictive benchmarks, and heterogeneity summaries.",
+                "focus_label": "Scientific results",
+                "sections": ["analyzed"],
+                "intro_sections": "",
+                "section_intro_map": {"analyzed": intro_map.get("analyzed", "")},
+            },
+            {
+                "slug": "ch06_relationships_validation",
+                "chapter_number": 6,
+                "filename": "cohort_ch06_relationships_validation.html",
+                "title": "CLTR Cohort Report: Chapter 6",
+                "subtitle": "Relationships and validation",
+                "description": "All-source and valid-only relationship views, plus device-agreement and validation outputs used to separate exploratory associations from claim-supporting evidence.",
+                "focus_label": "Validation layer",
+                "sections": ["interpretive"],
+                "intro_sections": "",
+                "section_intro_map": {"interpretive": intro_map.get("interpretive", "")},
+            },
+        ]
+        out = []
+        for chapter in chapters:
+            specs = [spec for spec in all_specs if spec.get("display_section", spec.get("section", "analyzed")) in chapter["sections"]]
+            enriched = dict(chapter)
+            enriched["specs"] = specs
+            enriched["observations"] = self._chapter_observations(cohort_inputs, specs)
+            out.append(enriched)
+        return out
+
+    def _cohort_chapter_html(
+        self,
+        cohort_inputs: dict,
+        title: str,
+        subtitle: str,
+        specs: list[dict],
+        intro_sections: str,
+        section_intro_map: dict[str, str],
+        chapter_menu_items_html: str,
+        chapter_number: int | None = None,
+    ) -> str:
+        return self._html_document(
+            title=title,
+            subtitle=subtitle,
+            cards=self._cohort_cards(cohort_inputs),
+            observations=self._chapter_observations(cohort_inputs, specs),
+            main_specs=specs,
+            appendix_specs=[],
+            intro_sections=intro_sections,
+            section_intro_map=section_intro_map,
+            chapter_number=chapter_number,
+            doc_kind="cohort",
+            middle_menu_button_id="sessionMenuButton",
+            middle_menu_panel_id="sessionMenuPanel",
+            middle_menu_label="Sessions",
+            middle_menu_title="Sessions",
+            middle_menu_items_html="<a href='../sessions_report.html'>Sessions Report<span>Dedicated session browser and participant-level reports</span></a>",
+            secondary_menu_button_id="chapterMenuButton",
+            secondary_menu_panel_id="chapterMenuPanel",
+            secondary_menu_label="Chapters",
+            secondary_menu_title="Cohort Chapters",
+            secondary_menu_items_html=chapter_menu_items_html,
+        )
+
+    def _cohort_index_html(
+        self,
+        cohort_inputs: dict,
+        chapters: list[dict],
+        chapter_paths: dict[str, str],
+        full_html_path: Path,
+    ) -> str:
+        cards_html = "".join(
+            f"<div class='card'><div class='label'>{html_escape(k)}</div><div class='value'>{html_escape(v)}</div></div>"
+            for k, v in self._cohort_cards(cohort_inputs)[:6]
+        )
+        chapter_cards = "".join(
+            f"<a class='chapterLinkCard' href='{html_escape(Path(chapter_paths[chapter['slug']]).name)}'>"
+            "<section class='tablePanel chapterCardPanel'>"
+            "<div class='chapterCardHeader'>"
+            "<div class='chapterCardTitleGroup'>"
+            f"<div class='chapterCardKicker'>{html_escape(chapter.get('focus_label', 'Cohort chapter'))}</div>"
+            f"<h3 class='chapterCardHeading'>{html_escape(chapter['title'].split(':')[-1].strip())}</h3>"
+            f"<p class='subtitle'>{html_escape(chapter['subtitle'])}</p>"
+            "</div>"
+            f"<div class='chapterCardBadge'>{len(chapter['specs'])} figures</div>"
+            "</div>"
+            f"<p class='chapterCardDesc'>{html_escape(chapter.get('description') or chapter['subtitle'])}</p>"
+            "<div class='chapterMetaGrid'>"
+            f"<div class='chapterMetaItem'><div class='chapterMetaLabel'>Primary focus</div><div class='chapterMetaValue'>{html_escape(chapter['subtitle'])}</div></div>"
+            f"<div class='chapterMetaItem'><div class='chapterMetaLabel'>Key note</div><div class='chapterMetaValue'>{html_escape(chapter['observations'][0] if chapter['observations'] else chapter.get('description', chapter['subtitle']))}</div></div>"
+            "</div>"
+            "<div class='chapterOpenRow'>"
+            "<div class='chapterOpenHint'>Open this chapter to inspect the full figure set, supporting tables, and audit framing.</div>"
+            "<div class='chapterOpenCta'>Open chapter</div>"
+            "</div>"
+            "</section>"
+            "</a>"
+            for chapter in chapters
+        )
+        chapter_menu_items_html = "".join(
+            f"<a href='{html_escape(Path(chapter_paths[chapter['slug']]).name)}'>{html_escape(chapter['title'].split(':')[-1].strip())}<span>{html_escape(chapter['subtitle'])}</span></a>"
+            for chapter in chapters
+        )
+        masthead = self._shared_chrome(
+            home_href="../index.html",
+            logo_src="../../../../cltr/docs/assets/logos/cltr.png",
+            page_type="Cohort Report",
+            page_meta="CLTR Cohort Chapters",
+            menu_button_id="sessionMenuButton",
+            menu_panel_id="sessionMenuPanel",
+            menu_label="Sessions",
+            menu_title="Sessions",
+            menu_items_html="<a href='../sessions_report.html'>Sessions Report<span>Dedicated session browser and participant-level reports</span></a>",
+            secondary_actions_html_after=self._menu_button_html(
+                button_id="chapterMenuButton",
+                panel_id="chapterMenuPanel",
+                label="Chapters",
+                title="Cohort Chapters",
+                items_html=chapter_menu_items_html,
+            ),
+        )
+        takeaways = self._takeaways_html(
+            [
+                "The cohort report is now delivered as a chaptered suite so the full audit and result set remains navigable.",
+                "Chapter 1 anchors the audit and governance tables; later chapters should be read against those decisions.",
+                "A full combined export is still available for continuity and cross-checking.",
+            ]
+        )
+        return f"""<!doctype html><html><head><meta charset='utf-8'><title>CLTR Cohort Report</title>
+<style>
+{self._shared_report_css()}
+</style></head><body class='reportKind--cohort'>{masthead}<div class='page' id='pageRoot'><section class='hero'><div class='panel heroLead'><div class='eyebrow'>Cohort Report</div><div class='title'>CLTR Cohort Report</div><p class='subtitle'>Chapter index for the cohort audit and result suite.</p><div class='cards'>{cards_html}</div><div class='heroActions'><a class='radioCta' href='{html_escape(full_html_path.name)}'>Full Cohort Report</a></div></div><div class='panel heroSide'>{takeaways}</div></section><div class='reportShell'><section class='stack'><section class='sectionBlock'><h3 class='sectionTitle'>Cohort Chapters</h3><section class='chapterGrid'>{chapter_cards}</section></section></section></div></div><div class='copyrightNote'>{COPYRIGHT_NOTE}</div><script>
+{self._theme_toggle_script()}
+{self._menu_script(button_id='sessionMenuButton', panel_id='sessionMenuPanel', var_prefix='sessionMenu')}
+{self._menu_script(button_id='chapterMenuButton', panel_id='chapterMenuPanel', var_prefix='chapterMenu')}
+</script></body></html>"""
 
     def _all_sessions_html(self, manifest: pd.DataFrame, session_reports: list[dict], cohort_report: dict) -> str:
         records = []
@@ -5561,61 +8680,122 @@ if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classLis
                     "lead_label": report.get("lead_label", ""),
                     "headline": report.get("headline", ""),
                     "tags": ", ".join(report.get("atlas_tags", [])),
+                    "tone_class": self._session_card_tone_class(str(row["condition_code"])),
                 }
             )
         cards = "".join(
-            f"<article class='sessionCard'>"
-            f"<div class='eyebrow'>{html_escape(r['condition_code'])}</div><h3>{html_escape(r['session_id'])}</h3><p><strong>Participant:</strong> {html_escape(r['participant_id'])}<br><strong>Condition:</strong> {html_escape(r['condition_code'])}<br><strong>Evidence score:</strong> {r['evidence_score']}</p><p><strong>Lead story:</strong> {html_escape(r['lead_label'])}</p><p>{html_escape(r['headline'])}</p><p class='tagLine'>{html_escape(r['tags'])}</p><a class='pillLink' href='../sessions/{html_escape(r['session_id'])}/html/{html_escape(r['html_name'])}'>{SESSION_CTA}</a></article>"
+            f"<article class='sessionCard {html_escape(r['tone_class'])}'>"
+            f"<div class='eyebrow'>{html_escape(r['condition_code'])}</div><h3>{html_escape(r['session_id'])}</h3><p><strong>Participant:</strong> {html_escape(r['participant_id'])}<br><strong>Condition:</strong> {html_escape(r['condition_code'])}<br><strong>Evidence score:</strong> {r['evidence_score']}</p><p><strong>Lead story:</strong> {html_escape(r['lead_label'])}</p><p>{html_escape(r['headline'])}</p><p class='tagLine'>{html_escape(r['tags'])}</p><a class='pillLink' href='sessions/{html_escape(r['session_id'])}/{html_escape(r['html_name'])}'>{SESSION_CTA}</a></article>"
             for r in records
         )
         session_nav_items = "".join(
-            f"<a href='../sessions/{html_escape(r['session_id'])}/html/{html_escape(r['html_name'])}' title='Open session report for {html_escape(r['session_id'])}'>"
+            f"<a href='sessions/{html_escape(r['session_id'])}/{html_escape(r['html_name'])}' title='Open session report for {html_escape(r['session_id'])}'>"
             f"{html_escape(r['session_id'])}<span>{html_escape(r['participant_id'])} | {html_escape(r['condition_code'])}</span></a>"
             for r in records
         )
         cohort_name = Path(cohort_report["html_path"]).name if cohort_report.get("html_path") else ""
+        intro_panel = (
+            f"<section class='panel heroLead heroIntro'>"
+            f"<div class='eyebrow'>Sessions Report</div>"
+            f"<div class='title'>CLTR Sessions Report</div>"
+            f"<p class='subtitle'>Browse all generated participant-session reports from one dedicated index.</p>"
+            f"<div class='heroMeta'>"
+            f"<p class='heroStatement'>This page is the session-level browsing layer of the CLTR report suite. Use it when you need per-session traces, condition context, and participant-specific evidence.</p>"
+            f"<div class='heroFacts'>"
+            f"<div class='heroFact'><div class='heroFactLabel'>Coverage</div><div class='heroFactValue'>{len(records)} generated session reports across the full study.</div></div>"
+            f"<div class='heroFact'><div class='heroFactLabel'>Study-wide report</div><div class='heroFactValue'><a class='pillLink' href='cohort/{html_escape(cohort_name)}'>{COHORT_CTA}</a></div></div>"
+            f"</div>"
+            f"</div>"
+            f"</section>"
+        )
+        masthead = self._shared_chrome(
+            home_href="index.html",
+            logo_src="../../../cltr/docs/assets/logos/cltr.png",
+            page_type="Sessions Report",
+            page_meta=f"{len(records)} generated session reports",
+            menu_button_id="sessionMenuButton",
+            menu_panel_id="sessionMenuPanel",
+            menu_label="Sessions",
+            menu_title="Session List",
+            menu_items_html=session_nav_items,
+            secondary_actions_html_after=self._menu_button_html(
+                button_id="chapterMenuButton",
+                panel_id="chapterMenuPanel",
+                label="Chapters",
+                title="Cohort Chapters",
+                items_html=self._cohort_chapter_menu_items_html("cohort/"),
+            ),
+        )
+        return f"""<!doctype html><html><head><meta charset='utf-8'><title>CLTR Sessions Report</title>
+<style>
+{self._shared_index_css()}
+</style></head><body class='reportKind--atlas'>{masthead}<div class='page'><section class='hero'>{intro_panel}</section><section id='sessionGrid' class='grid'>{cards}</section></div><div class='copyrightNote'>{COPYRIGHT_NOTE}</div><script>
+{self._theme_toggle_script()}
+{self._menu_script(button_id='sessionMenuButton', panel_id='sessionMenuPanel', var_prefix='sessionMenu')}
+{self._menu_script(button_id='chapterMenuButton', panel_id='chapterMenuPanel', var_prefix='chapterMenu')}
+</script></body></html>"""
+
+    def _atlas_html(self, manifest: pd.DataFrame, session_reports: list[dict], cohort_report: dict, sessions_index_name: str) -> str:
+        session_count = len(session_reports)
+        cohort_name = Path(cohort_report["html_path"]).name if cohort_report.get("html_path") else "cohort_report.html"
+        masthead = self._shared_chrome(
+            home_href="index.html",
+            logo_src="../../../cltr/docs/assets/logos/cltr.png",
+            page_type="Atlas",
+            page_meta=f"{session_count} session reports and one cohort summary",
+            menu_button_id="atlasMenuButton",
+            menu_panel_id="atlasMenuPanel",
+            menu_label="Navigate",
+            menu_title="Atlas Destinations",
+            menu_items_html=(
+                f"<a href='cohort/{html_escape(cohort_name)}'>Cohort Report<span>Study-wide audit, chapters, and full combined report</span></a>"
+                f"<a href='{html_escape(sessions_index_name)}'>Sessions Report<span>Dedicated session browser and participant-level reports</span></a>"
+            ),
+            show_menu_button=False,
+        )
         atlas_intro = (
             f"<section class='panel heroIntro heroSticky'>"
             f"<div class='eyebrow'>CLTR Reporting</div>"
             f"<div class='title'>{WORK_INDEX_TITLE}</div>"
             f"<p class='subtitle'>{WORK_INDEX_SUBTITLE}</p>"
             f"<div class='heroMeta'>"
-            f"<p class='heroStatement'>An interactive report hub for the CLTR study, combining study-wide findings with session-level views of physiology, environmental conditions, and comfort responses.</p>"
+            f"<p class='heroStatement'>This atlas is the top-level gateway for the CLTR reporting suite. Start with either the study-wide cohort synthesis or the dedicated session-report browser.</p>"
             f"<div class='heroFacts'>"
-            f"<div class='heroFact'><div class='heroFactLabel'>Study</div><div class='heroFactValue'>Controlled Laboratory Thermal Response study reporting hub.</div></div>"
-            f"<div class='heroFact'><div class='heroFactLabel'>Coverage</div><div class='heroFactValue'>{len(records)} session reports plus one study-wide summary.</div></div>"
+            f"<div class='heroFact'><div class='heroFactLabel'>Study</div><div class='heroFactValue'>Controlled Laboratory Thermal Response reporting hub.</div></div>"
+            f"<div class='heroFact'><div class='heroFactLabel'>Coverage</div><div class='heroFactValue'>{session_count} session reports plus one study-wide cohort suite.</div></div>"
             f"</div>"
             f"</div>"
             f"</section>"
         )
-        cohort_panel = (
-            f"<section class='panel heroCta heroSticky'>"
-            f"<div class='eyebrow'>Start Here</div>"
-            f"<div class='title'>Study Summary</div>"
-            f"<p class='subtitle'>Start with the study-wide report for the overall CLTR findings, then explore individual session reports below.</p>"
-            f"<a class='pillLink' href='../cohort/html/{html_escape(cohort_name)}'>{COHORT_CTA}</a>"
-            f"</section>"
+        cohort_card = (
+            f"<a class='panel gatewayCard heroSticky' href='cohort/{html_escape(cohort_name)}'>"
+            f"<div class='eyebrow'>Primary Entry</div>"
+            f"<div class='title'>Cohort Report</div>"
+            f"<p class='subtitle'>Open the study-wide audit, chapter suite, and full combined cohort synthesis.</p>"
+            f"<div class='gatewayMeta'>"
+            f"<div class='gatewayFact'><div class='gatewayFactLabel'>Best for</div><div class='gatewayFactValue'>Study-level findings, device audit, scenario logic, and manuscript-facing figures.</div></div>"
+            f"<div class='gatewayFact'><div class='gatewayFactLabel'>Includes</div><div class='gatewayFactValue'>Cohort chapters, full report, modality inventory, and validation layers.</div></div>"
+            f"</div>"
+            f"<div class='gatewayCta'>Open cohort report</div>"
+            f"</a>"
         )
-        masthead = self._shared_chrome(
-            home_href="index.html",
-            page_type="Atlas",
-            page_meta=f"{len(records)} session reports and one cohort summary",
-            menu_button_id="sessionMenuButton",
-            menu_panel_id="sessionMenuPanel",
-            menu_label="Sessions",
-            menu_title="Session List",
-            menu_items_html=session_nav_items,
-            menu_icon_bars=True,
+        sessions_card = (
+            f"<a class='panel gatewayCard heroSticky' href='{html_escape(sessions_index_name)}'>"
+            f"<div class='eyebrow'>Primary Entry</div>"
+            f"<div class='title'>Sessions Report</div>"
+            f"<p class='subtitle'>Open the dedicated session browser for participant-level reports, traces, and session-specific evidence.</p>"
+            f"<div class='gatewayMeta'>"
+            f"<div class='gatewayFact'><div class='gatewayFactLabel'>Best for</div><div class='gatewayFactValue'>Per-session physiology, environmental context, and within-session narrative inspection.</div></div>"
+            f"<div class='gatewayFact'><div class='gatewayFactLabel'>Coverage</div><div class='gatewayFactValue'>{session_count} generated session reports across all participants and conditions.</div></div>"
+            f"</div>"
+            f"<div class='gatewayCta'>Open sessions report</div>"
+            f"</a>"
         )
         return f"""<!doctype html><html><head><meta charset='utf-8'><title>{WORK_INDEX_TITLE}</title>
 <style>
 {self._shared_index_css()}
-</style></head><body class='reportKind--atlas'>{masthead}<div class='page'><section class='hero'>{atlas_intro}{cohort_panel}</section><section id='sessionGrid' class='grid'>{cards}</section></div><div class='copyrightNote'>{COPYRIGHT_NOTE}</div><script>
+</style></head><body class='reportKind--atlas'>{masthead}<div class='page'><section class='hero'>{atlas_intro}</section><section class='gatewayGrid'>{cohort_card}{sessions_card}</section></div><div class='copyrightNote'>{COPYRIGHT_NOTE}</div><script>
 {self._theme_toggle_script()}
-const sessionMenuButton=document.getElementById('sessionMenuButton'); const sessionMenuPanel=document.getElementById('sessionMenuPanel');
-const closeSessionMenu=()=>{{ if(!sessionMenuPanel||!sessionMenuButton) return; sessionMenuPanel.classList.remove('open'); sessionMenuButton.setAttribute('aria-expanded','false'); }};
-const toggleSessionMenu=()=>{{ if(!sessionMenuPanel||!sessionMenuButton) return; const open=sessionMenuPanel.classList.toggle('open'); sessionMenuButton.setAttribute('aria-expanded', open ? 'true' : 'false'); }};
-if(sessionMenuButton&&sessionMenuPanel){{ sessionMenuButton.addEventListener('click',(event)=>{{ event.stopPropagation(); toggleSessionMenu(); }}); sessionMenuPanel.querySelectorAll('a').forEach(link=>link.addEventListener('click', closeSessionMenu)); document.addEventListener('click',(event)=>{{ if(!sessionMenuPanel.contains(event.target) && !sessionMenuButton.contains(event.target)) closeSessionMenu(); }}); document.addEventListener('keydown',(event)=>{{ if(event.key==='Escape') closeSessionMenu(); }}); }}
 </script></body></html>"""
 
     def _render_spec_sections(
@@ -5623,20 +8803,36 @@ if(sessionMenuButton&&sessionMenuPanel){{ sessionMenuButton.addEventListener('cl
         specs: list[dict],
         intro_sections: str = "",
         section_intro_map: dict[str, str] | None = None,
+        chapter_number: int | None = None,
     ) -> str:
-        display_map, section_map = self._display_numbering(
+        display_map, section_map, kind_map = self._display_numbering(
             specs,
             intro_sections=intro_sections,
             section_intro_map=section_intro_map,
+            chapter_number=chapter_number,
         )
         parts = []
         section_intro_map = section_intro_map or {}
+        table_index = 0
         for section in SECTION_ORDER:
             section_specs = [spec for spec in specs if spec.get("display_section", "analyzed") == section]
             intro_html = intro_sections if section == "frontmatter" else section_intro_map.get(section, "")
             if not section_specs and not intro_html:
                 continue
-            body = "".join(self._figure_subsection(spec, display_map.get(spec["stem"], spec["code"])) for spec in section_specs)
+            if chapter_number is not None and intro_html:
+                intro_html, table_index = self._number_table_panels(
+                    intro_html,
+                    chapter_number=chapter_number,
+                    start_index=table_index,
+                )
+            body = "".join(
+                self._spec_subsection(
+                    spec,
+                    display_map.get(spec["stem"], spec["code"]),
+                    kind_map.get(spec["stem"], "figure"),
+                )
+                for spec in section_specs
+            )
             if intro_html:
                 body = intro_html + body
             section_label = section_map.get(section, SECTION_TITLES[section])
@@ -5648,21 +8844,45 @@ if(sessionMenuButton&&sessionMenuPanel){{ sessionMenuButton.addEventListener('cl
         specs: list[dict],
         intro_sections: str = "",
         section_intro_map: dict[str, str] | None = None,
-    ) -> tuple[dict[str, str], dict[str, str]]:
+        chapter_number: int | None = None,
+    ) -> tuple[dict[str, str], dict[str, str], dict[str, str]]:
         display_map: dict[str, str] = {}
         section_map: dict[str, str] = {}
+        kind_map: dict[str, str] = {}
         section_intro_map = section_intro_map or {}
         section_index = 0
+        figure_counter = 0
+        table_counter = 0
         for section in SECTION_ORDER:
             section_specs = [spec for spec in specs if spec.get("display_section", "analyzed") == section]
             intro_html = bool(intro_sections) if section == "frontmatter" else bool(section_intro_map.get(section))
             if not section_specs and not intro_html:
                 continue
             section_index += 1
-            section_map[section] = f"Section {section_index}. {SECTION_TITLES[section]}"
-            for figure_index, spec in enumerate(section_specs):
-                display_map[spec["stem"]] = f"{section_index}.{figure_index + 1}"
-        return display_map, section_map
+            if chapter_number is not None:
+                section_map[section] = f"Section {chapter_number}.{section_index}. {SECTION_TITLES[section]}"
+            else:
+                section_map[section] = f"Section {section_index}. {SECTION_TITLES[section]}"
+            local_figure_counter = 0
+            local_table_counter = 0
+            for local_figure_index, spec in enumerate(section_specs):
+                display_kind = self._spec_display_kind(spec)
+                kind_map[spec["stem"]] = display_kind
+                if chapter_number is not None:
+                    if display_kind == "table":
+                        table_counter += 1
+                        display_map[spec["stem"]] = f"{chapter_number}.{table_counter}"
+                    else:
+                        figure_counter += 1
+                        display_map[spec["stem"]] = f"{chapter_number}.{figure_counter}"
+                else:
+                    if display_kind == "table":
+                        local_table_counter += 1
+                        display_map[spec["stem"]] = f"{section_index}.{local_table_counter}"
+                    else:
+                        local_figure_counter += 1
+                        display_map[spec["stem"]] = f"{section_index}.{local_figure_counter}"
+        return display_map, section_map, kind_map
 
     def _html_document(
         self,
@@ -5675,16 +8895,30 @@ if(sessionMenuButton&&sessionMenuPanel){{ sessionMenuButton.addEventListener('cl
         appendix_specs: list[dict],
         intro_sections: str = "",
         section_intro_map: dict[str, str] | None = None,
+        chapter_number: int | None = None,
         doc_kind: str = "report",
+        hero_actions_html: str = "",
+        middle_menu_button_id: str = "",
+        middle_menu_panel_id: str = "",
+        middle_menu_label: str = "",
+        middle_menu_title: str = "",
+        middle_menu_items_html: str = "",
+        secondary_menu_button_id: str = "",
+        secondary_menu_panel_id: str = "",
+        secondary_menu_label: str = "",
+        secondary_menu_title: str = "",
+        secondary_menu_items_html: str = "",
     ) -> str:
         all_specs = main_specs + appendix_specs
-        display_map, _ = self._display_numbering(
+        display_map, _, kind_map = self._display_numbering(
             all_specs,
             intro_sections=intro_sections,
             section_intro_map=section_intro_map,
+            chapter_number=chapter_number,
         )
+        has_tables = any(kind_map.get(spec["stem"]) == "table" for spec in all_specs)
         nav_items = "".join(
-            f"<a href='#{html_escape(spec['stem'])}' aria-label='Figure {html_escape(display_map.get(spec['stem'], spec['code']))}: {html_escape(spec['title'])}' title='Figure {html_escape(display_map.get(spec['stem'], spec['code']))}: {html_escape(spec['title'])}'>{html_escape(display_map.get(spec['stem'], spec['code']))}<span>{html_escape(spec['title'])}</span></a>"
+            f"<a href='#{html_escape(spec['stem'])}' aria-label='{html_escape(kind_map.get(spec['stem'], 'figure').title())} {html_escape(display_map.get(spec['stem'], spec['code']))}: {html_escape(spec['title'])}' title='{html_escape(kind_map.get(spec['stem'], 'figure').title())} {html_escape(display_map.get(spec['stem'], spec['code']))}: {html_escape(spec['title'])}'>{'Tab' if kind_map.get(spec['stem'], 'figure') == 'table' else 'Fig'} {html_escape(display_map.get(spec['stem'], spec['code']))}<span>{html_escape(spec['title'])}</span></a>"
             for spec in all_specs
         )
         cards_html = "".join(f"<div class='card'><div class='label'>{html_escape(k)}</div><div class='value'>{html_escape(v)}</div></div>" for k, v in cards)
@@ -5693,30 +8927,62 @@ if(sessionMenuButton&&sessionMenuPanel){{ sessionMenuButton.addEventListener('cl
             all_specs,
             intro_sections=intro_sections,
             section_intro_map=section_intro_map,
+            chapter_number=chapter_number,
         )
         plotly_js = f"<script>{get_plotlyjs()}</script>" if any(spec.get("html_fragment") for spec in all_specs) else ""
         badge = "Cohort Report" if str(doc_kind) == "cohort" else "Session Report"
-        home_href = "../../work/index.html" if str(doc_kind) == "cohort" else "../../../work/index.html"
+        home_href = "../index.html" if str(doc_kind) == "cohort" else "../../index.html"
         masthead = self._shared_chrome(
             home_href=home_href,
+            logo_src="../../../../cltr/docs/assets/logos/cltr.png" if str(doc_kind) == "cohort" else "../../../../../cltr/docs/assets/logos/cltr.png",
             page_type=badge,
             page_meta=title,
             menu_button_id="figureMenuButton",
             menu_panel_id="figureMenuPanel",
-            menu_label="List of Figures",
-            menu_title="List of Figures",
+            menu_label="Figures And Tables" if has_tables else "List of Figures",
+            menu_title="Figures And Tables" if has_tables else "List of Figures",
             menu_items_html=nav_items,
+            secondary_actions_html_after=(
+                (
+                    self._menu_button_html(
+                        button_id=middle_menu_button_id,
+                        panel_id=middle_menu_panel_id,
+                        label=middle_menu_label,
+                        title=middle_menu_title,
+                        items_html=middle_menu_items_html,
+                    )
+                    if middle_menu_button_id and middle_menu_panel_id and middle_menu_label and middle_menu_title
+                    else ""
+                )
+                +
+                (
+                    self._menu_button_html(
+                        button_id=secondary_menu_button_id,
+                        panel_id=secondary_menu_panel_id,
+                        label=secondary_menu_label,
+                        title=secondary_menu_title,
+                        items_html=secondary_menu_items_html,
+                    )
+                )
+                if secondary_menu_button_id and secondary_menu_panel_id and secondary_menu_label and secondary_menu_title
+                else ""
+            ),
         )
         return f"""<!doctype html><html><head><meta charset='utf-8'><title>{html_escape(title)}</title>
 <style>
 {self._shared_report_css()}
-</style></head><body class='reportKind--{html_escape(doc_kind)}'>{masthead}<div class='page' id='pageRoot'><section class='hero'><div class='panel heroLead'><div class='eyebrow'>{html_escape(badge)}</div><div class='title'>{html_escape(title)}</div><p class='subtitle'>{html_escape(subtitle)}</p><div class='cards'>{cards_html}</div></div><div class='panel heroSide'>{obs_html}</div></section><div class='reportShell'><section class='stack'>{sections_html}</section></div></div><div id='lightbox' class='lightbox'><img id='lightboxImg' alt='Expanded figure'/></div><div class='copyrightNote'>{COPYRIGHT_NOTE}</div>{plotly_js}<script>
+</style></head><body class='reportKind--{html_escape(doc_kind)}'>{masthead}<div class='page' id='pageRoot'><section class='hero'><div class='panel heroLead'><div class='eyebrow'>{html_escape(badge)}</div><div class='title'>{html_escape(title)}</div><p class='subtitle'>{html_escape(subtitle)}</p><div class='cards'>{cards_html}</div>{hero_actions_html}</div><div class='panel heroSide'>{obs_html}</div></section><div class='reportShell'><section class='stack'>{sections_html}</section></div></div><div id='lightbox' class='lightbox'><img id='lightboxImg' alt='Expanded figure'/></div><div class='copyrightNote'>{COPYRIGHT_NOTE}</div>{plotly_js}<script>
 {self._theme_toggle_script()}
 const lightbox=document.getElementById('lightbox'); const lightboxImg=document.getElementById('lightboxImg'); document.querySelectorAll('.figureImage').forEach(img=>img.addEventListener('click',()=>{{ lightboxImg.src=img.src; lightbox.classList.add('open'); }})); lightbox.addEventListener('click',()=>lightbox.classList.remove('open'));
 const figureMenuButton=document.getElementById('figureMenuButton'); const figureMenuPanel=document.getElementById('figureMenuPanel');
 const closeFigureMenu=()=>{{ if(!figureMenuPanel||!figureMenuButton) return; figureMenuPanel.classList.remove('open'); figureMenuButton.setAttribute('aria-expanded','false'); }};
 const toggleFigureMenu=()=>{{ if(!figureMenuPanel||!figureMenuButton) return; const open=figureMenuPanel.classList.toggle('open'); figureMenuButton.setAttribute('aria-expanded', open ? 'true' : 'false'); }};
 if(figureMenuButton&&figureMenuPanel){{ figureMenuButton.addEventListener('click',(event)=>{{ event.stopPropagation(); toggleFigureMenu(); }}); figureMenuPanel.querySelectorAll('a').forEach(link=>link.addEventListener('click', closeFigureMenu)); document.addEventListener('click',(event)=>{{ if(!figureMenuPanel.contains(event.target) && !figureMenuButton.contains(event.target)) closeFigureMenu(); }}); document.addEventListener('keydown',(event)=>{{ if(event.key==='Escape') closeFigureMenu(); }}); }}
+{self._menu_script(button_id=middle_menu_button_id, panel_id=middle_menu_panel_id, var_prefix='sessionMenu') if middle_menu_button_id and middle_menu_panel_id else ''}
+const chapterMenuButton=document.getElementById('{html_escape(secondary_menu_button_id)}'); const chapterMenuPanel=document.getElementById('{html_escape(secondary_menu_panel_id)}');
+const closeChapterMenu=()=>{{ if(!chapterMenuPanel||!chapterMenuButton) return; chapterMenuPanel.classList.remove('open'); chapterMenuButton.setAttribute('aria-expanded','false'); }};
+const toggleChapterMenu=()=>{{ if(!chapterMenuPanel||!chapterMenuButton) return; const open=chapterMenuPanel.classList.toggle('open'); chapterMenuButton.setAttribute('aria-expanded', open ? 'true' : 'false'); }};
+if(chapterMenuButton&&chapterMenuPanel){{ chapterMenuButton.addEventListener('click',(event)=>{{ event.stopPropagation(); toggleChapterMenu(); }}); chapterMenuPanel.querySelectorAll('a').forEach(link=>link.addEventListener('click', closeChapterMenu)); document.addEventListener('click',(event)=>{{ if(!chapterMenuPanel.contains(event.target) && !chapterMenuButton.contains(event.target)) closeChapterMenu(); }}); document.addEventListener('keydown',(event)=>{{ if(event.key==='Escape') closeChapterMenu(); }}); }}
 const resizePlots=()=>{{ if(!window.Plotly) return; document.querySelectorAll('.js-plotly-plot').forEach(plot=>window.Plotly.Plots.resize(plot)); }};
 window.addEventListener('resize', resizePlots); requestAnimationFrame(resizePlots);
 </script></body></html>"""
@@ -5737,8 +9003,14 @@ window.addEventListener('resize', resizePlots); requestAnimationFrame(resizePlot
             "</section>"
         )
 
-    def _figure_subsection(self, spec: dict, display_code: str) -> str:
-        section_label = f"Figure {display_code}"
+    def _spec_display_kind(self, spec: dict) -> str:
+        html_fragment = str(spec.get("html_fragment") or "")
+        if "<table" in html_fragment and "tablePanel" in html_fragment:
+            return "table"
+        return "figure"
+
+    def _spec_subsection(self, spec: dict, display_code: str, display_kind: str) -> str:
+        section_label = f"{display_kind.title()} {display_code}"
         return f"<section class='figureSection'><h3 class='figureSectionTitle'>{html_escape(section_label)}</h3>{self._figure_block(spec)}</section>"
 
     def _caption_text(self, text: str) -> str:
@@ -5818,9 +9090,12 @@ window.addEventListener('resize', resizePlots); requestAnimationFrame(resizePlot
         meta = f"<p class='figureMeta'>{html_escape(' | '.join(meta_parts))}</p>"
         classes = "figurePanel"
         if spec.get("html_fragment"):
-            media = f"<div class='responsiveFigure'>{spec['html_fragment']}</div>"
+            fragment = str(spec["html_fragment"])
+            if "dataTablePanel" in fragment:
+                fragment = re.sub(r"<h3>.*?</h3>", "", fragment, count=1, flags=re.DOTALL)
+            media = f"<div class='responsiveFigure'>{fragment}</div>"
         else:
-            media = f"<img class='figureImage' src='../figures/{html_escape(path)}' alt='{html_escape(spec['title'])}'/>"
+            media = f"<img class='figureImage' src='figures/{html_escape(path)}' alt='{html_escape(spec['title'])}'/>"
         caption = self._caption_html(spec.get("summary", ""), spec.get("caption_note", ""), spec.get("panel_notes", []))
         heading = f"<h2>{html_escape(spec['title'])}</h2>"
         return f"<article id='{html_escape(spec['stem'])}' class='{classes}'>{heading}{media}{meta}<p class='caption'>{caption}</p></article>"
@@ -5833,11 +9108,39 @@ window.addEventListener('resize', resizePlots); requestAnimationFrame(resizePlot
             keep = [c for c in columns if c in view.columns]
             view = view[keep]
         view = view.head(n)
-        headers = "".join(f"<th>{html_escape(self._table_column_label(c))}</th>" for c in view.columns)
+        headers = "".join(
+            f"<th class='{html_escape(self._table_column_class(c))}'>{html_escape(self._table_column_label(c))}</th>"
+            for c in view.columns
+        )
         rows = []
         for _, row in view.iterrows():
-            rows.append("<tr>" + "".join(f"<td>{html_escape(self._fmt_cell(v))}</td>" for v in row.tolist()) + "</tr>")
-        return f"<section class='tablePanel'><h3>{html_escape(title)}</h3><table><thead><tr>{headers}</tr></thead><tbody>{''.join(rows)}</tbody></table></section>"
+            rows.append(
+                "<tr>" + "".join(
+                    f"<td class='{html_escape(self._table_column_class(col))}'>{html_escape(self._fmt_cell(val, column=col))}</td>"
+                    for col, val in zip(view.columns, row.tolist())
+                ) + "</tr>"
+            )
+        return f"<section class='tablePanel dataTablePanel'><h3>{html_escape(title)}</h3><div class='tableScroll'><table><thead><tr>{headers}</tr></thead><tbody>{''.join(rows)}</tbody></table></div></section>"
+
+    def _number_table_panels(self, html: str, *, chapter_number: int, start_index: int = 0) -> tuple[str, int]:
+        counter = start_index
+
+        def repl(match: re.Match[str]) -> str:
+            nonlocal counter
+            counter += 1
+            return f"{match.group(1)}Table {chapter_number}.{counter}. {match.group(2)}{match.group(3)}"
+
+        numbered = re.sub(
+            r"(<section class='tablePanel dataTablePanel'>\s*<h3>)(.*?)(</h3>)",
+            repl,
+            html,
+            flags=re.DOTALL,
+        )
+        return numbered, counter
+
+    def _table_column_class(self, value: object) -> str:
+        text = re.sub(r"[^a-z0-9]+", "_", str(value).strip().lower()).strip("_")
+        return f"col-{text}" if text else "col-generic"
 
     def _table_column_label(self, value: object) -> str:
         text = str(value)
@@ -5845,8 +9148,19 @@ window.addEventListener('resize', resizePlots); requestAnimationFrame(resizePlot
             return FEATURE_LABELS[text]
         return TABLE_COLUMN_LABELS.get(text, text.replace("_", " ").title())
 
-    def _fmt_cell(self, value: object) -> str:
+    def _fmt_cell(self, value: object, column: str | None = None) -> str:
         if isinstance(value, float):
+            if column and column in {"p_value", "p_value_fdr", "primary_p_value", "t_p_value", "wilcoxon_p_value", "spearman_p_value", "spearman_p_value_fdr"}:
+                if not pd.notna(value):
+                    return ""
+                value = float(value)
+                if value == 0:
+                    return "<1e-300"
+                if value < 1e-3:
+                    return f"{value:.2e}"
+                return f"{value:.4f}"
+            if pd.notna(value) and float(value).is_integer():
+                return str(int(value))
             return f"{value:.3f}" if pd.notna(value) else ""
         if isinstance(value, str):
             replacements = {
@@ -5883,6 +9197,28 @@ window.addEventListener('resize', resizePlots); requestAnimationFrame(resizePlot
                 "not_primary": "Not primary",
                 "not_recommended": "Not recommended",
                 "usable_with_caution": "Usable with caution",
+                "yes": "Yes",
+                "no": "No",
+                "not_audited": "Not audited",
+                "all_sources": "All-source",
+                "valid_only": "Valid-only",
+                "directly_comparable": "Directly comparable pair",
+                "device_specific": "Device-specific stream",
+                "source_only": "Source-only stream",
+                "same_construct_not_paired": "Same construct, not paired",
+                "valid-only eligible": "Valid-only eligible",
+                "audit-only if included": "Audit-only if included",
+                "derived/context endpoint": "Derived/context endpoint",
+                "stream-role unclear": "Stream-role unclear",
+                "primary_outcome": "Primary outcome",
+                "primary_physiological": "Primary physiological",
+                "primary_physiological_qc": "QC-qualified primary physiological",
+                "protocol_check": "Primary protocol check",
+                "secondary_mechanistic": "Secondary mechanistic",
+                "audit_only": "Audit-only",
+                "not_endpoint_graded": "Not endpoint-graded",
+                "direct_analytic_feature": "Direct analytic feature",
+                "audit_report_only": "Audit/report-only stream",
             }
             if value in FEATURE_LABELS:
                 return FEATURE_LABELS[value]
@@ -5896,10 +9232,23 @@ window.addEventListener('resize', resizePlots); requestAnimationFrame(resizePlot
                 "biopac_temp": "BIOPAC chest temperature",
                 "empatica_temp": "Empatica temperature",
                 "empatica_bvp": "Empatica BVP",
+                "empatica_acc": "Empatica acceleration",
+                "empatica_enmo": "Empatica ENMO",
+                "empatica_steps": "Empatica steps",
+                "biopac_temp_thigh": "BIOPAC thigh temperature",
+                "biopac_temp_arm": "BIOPAC arm temperature",
+                "biopac_temp_tibia": "BIOPAC tibia temperature",
+                "biopac_bloodflow": "BIOPAC blood flow",
+                "biopac_backscatter": "BIOPAC backscatter",
                 "heart_rate": "Heart rate",
                 "eda": "EDA",
                 "temperature": "Temperature",
                 "bvp_source": "BVP source",
+                "motion": "Motion",
+                "activity": "Activity",
+                "temperature_site": "Temperature site",
+                "bloodflow": "Blood flow",
+                "optical": "Optical",
                 "strong": "Strong",
                 "limited": "Limited",
                 "weak": "Weak",
@@ -5920,6 +9269,33 @@ window.addEventListener('resize', resizePlots); requestAnimationFrame(resizePlot
                 return value
             return value.replace("_", " ")
         return str(value)
+
+    def _report_metric_label(self, metric: str) -> str:
+        metric = str(metric)
+        if metric in REPORT_METRIC_LABELS:
+            return REPORT_METRIC_LABELS[metric]
+        if metric in FEATURE_LABELS:
+            return FEATURE_LABELS[metric]
+        return metric.replace("_", " ").title()
+
+    def _series_title(self, metric: str, *, scope: str, kind: str) -> str:
+        label = self._report_metric_label(metric)
+        kind = REPORT_METRIC_KINDS.get(str(metric), kind)
+        if kind == "observation":
+            suffix = "observations"
+        elif kind == "distribution":
+            suffix = "distributions"
+        else:
+            suffix = kind
+        return f"{scope} {label} {suffix}"
+
+    def _cohort_metric_section(self, metric: str) -> str:
+        metric = str(metric)
+        if self._is_sparse_observation_channel(metric) or metric in {"fan_control_au", "fan_control_secondary_au", "fan_current_A"}:
+            return "subjective_behavioral"
+        if metric.startswith("indoor_") or metric.startswith("outdoor_"):
+            return "environmental"
+        return "physiological"
 
     def _session_report_tables(self, phase: pd.DataFrame, meta: dict) -> str:
         cols = [
@@ -5953,6 +9329,12 @@ window.addEventListener('resize', resizePlots); requestAnimationFrame(resizePlot
         agreement = c.get("agreement_summary", pd.DataFrame()).copy()
         signal_audit = c.get("signal_audit_summary", pd.DataFrame()).copy()
         session_signal_audit = c.get("session_signal_audit", pd.DataFrame()).copy()
+        support_profile = self._cohort_endpoint_support_profile(c.get("cohort_phase_summary", pd.DataFrame()))
+        scenario_register = self._scenario_register(signal_audit)
+        inventory = self._device_stream_inventory_register(c.get("cohort_minute_features", pd.DataFrame()), signal_audit)
+        pathway = self._analysis_pathway_register(c.get("cohort_minute_features", pd.DataFrame()), support_profile, signal_audit)
+        comparable_inventory = inventory.loc[inventory["comparison_class"] == "directly_comparable"].copy() if not inventory.empty else pd.DataFrame()
+        non_comparable_inventory = inventory.loc[inventory["comparison_class"] != "directly_comparable"].copy() if not inventory.empty else pd.DataFrame()
         b = self._render_table(
             support,
             "Comparison-Window Support By Condition",
@@ -5965,18 +9347,32 @@ window.addEventListener('resize', resizePlots); requestAnimationFrame(resizePlot
                 "biopac_fraction__mean",
                 "indoor_fraction__mean",
                 "hr_overlap_minutes__mean",
+                "eda_overlap_minutes__mean",
+                "temp_overlap_minutes__mean",
             ],
             12,
         )
+        scenario_table = self._render_table(
+            scenario_register,
+            "Scenario Definitions Across Device Streams",
+            ["scenario", "included_streams", "excluded_streams", "scientific_use"],
+            8,
+        )
         ctab = self._render_table(
             agreement,
-            "Device Comparison Summary",
+            "Cross-Device Comparable Stream Summary",
             ["metric", "n_sessions", "n_eligible_sessions", "median_overlap_minutes", "median_spearman_r", "median_mae", "summary_status"],
             8,
         )
+        comparable_table = self._render_table(
+            comparable_inventory,
+            "Cross-Device Comparability Register",
+            ["stream_label", "device", "construct", "comparison_class", "signal_audited", "recommended_role", "adequacy_status"],
+            16,
+        )
         signal_table = self._render_table(
             signal_audit,
-            "Signal Adequacy And Recommended Use",
+            "Full Signal Audit Across Device Streams",
             [
                 "signal_stream",
                 "device",
@@ -5989,29 +9385,46 @@ window.addEventListener('resize', resizePlots); requestAnimationFrame(resizePlot
                 "adequacy_score",
                 "recommended_role",
             ],
-            12,
+            24,
         )
         signal_reading = self._render_table(
             signal_audit,
             "Scientific Reading Of Device Streams",
             ["signal_stream", "adequacy_status", "flagged_sessions", "scientific_reading"],
-            12,
+            24,
         )
-        hr_flags = pd.DataFrame()
-        if not session_signal_audit.empty:
-            hr_flags = (
-                session_signal_audit.loc[session_signal_audit["construct"].astype(str) == "heart_rate"]
-                .sort_values(["concern_score", "session_id"], ascending=[False, True])
-                .head(8)
-                .copy()
-            )
+        flagged_streams = self._flagged_stream_session_register(session_signal_audit)
         flag_table = self._render_table(
-            hr_flags,
-            "Flagged Heart-Rate Sessions",
-            ["session_id", "signal_stream", "n_valid_minutes", "paired_overlap_minutes", "paired_spearman_r", "min_value", "max_value", "concern_score"],
-            8,
+            flagged_streams,
+            "High-Concern Device Streams Across Sessions",
+            ["signal_stream", "device", "construct", "flagged_session_streams", "affected_sessions", "primary_concern_driver", "concern_profile", "max_concern_score", "top_flagged_sessions"],
+            24,
         )
-        return f"<section class='tableGrid'>{b}</section><section class='tableGrid'>{ctab}{signal_table}</section><section class='tableGrid'>{signal_reading}{flag_table}</section>"
+        inventory_table = self._render_table(
+            inventory,
+            "Empatica And BIOPAC Stream Inventory",
+            ["stream_label", "device", "construct", "comparison_class", "present_in_cohort_table", "signal_audited", "cross_device_comparable", "analytic_feature", "stream_usage", "endpoint_policy_role", "recommended_role", "adequacy_status"],
+            24,
+        )
+        pathway_table = self._render_table(
+            pathway,
+            "Endpoint Analysis Pathway Across Full Modality Set",
+            ["endpoint", "metric", "source_streams", "in_cohort_table", "support_grade", "support_basis", "endpoint_policy_role", "pathway_status"],
+            36,
+        )
+        non_comparable_table = self._render_table(
+            non_comparable_inventory,
+            "Device-Specific, Same-Construct, And Source-Only Stream Register",
+            ["stream_label", "device", "construct", "comparison_class", "analytic_feature", "stream_usage", "endpoint_policy_role", "recommended_role", "adequacy_status", "scientific_use"],
+            24,
+        )
+        return (
+            f"<section class='tableGrid'>{b}{scenario_table}</section>"
+            f"<section class='tableGrid'>{ctab}{comparable_table}</section>"
+            f"<section class='tableGrid'>{signal_table}{signal_reading}</section>"
+            f"<section class='tableGrid'>{inventory_table}{pathway_table}</section>"
+            f"<section class='tableGrid'>{non_comparable_table}{flag_table}</section>"
+        )
 
     def _stage_panel(self, title: str, body: str) -> str:
         return f"<section class='tablePanel'><h3>{html_escape(title)}</h3><p>{html_escape(body)}</p></section>"
@@ -6108,26 +9521,26 @@ window.addEventListener('resize', resizePlots); requestAnimationFrame(resizePlot
         sample = c["sample_status"].iloc[0]
         inferential = bool(sample["cohort_inference_eligible"])
         signal_audit = c.get("signal_audit_summary", pd.DataFrame()).copy()
-        hr_rows = signal_audit.loc[signal_audit["construct"].astype(str) == "heart_rate"].copy() if not signal_audit.empty else pd.DataFrame()
-        hr_summary = ""
-        if not hr_rows.empty:
-            primary = hr_rows.loc[hr_rows["recommended_role"].astype(str).isin(["primary", "primary_with_qc"]), "signal_stream"].astype(str).tolist()
-            limited = hr_rows.loc[~hr_rows["recommended_role"].astype(str).isin(["primary", "primary_with_qc"]), "signal_stream"].astype(str).tolist()
+        modality_summary = ""
+        if not signal_audit.empty:
+            primary = signal_audit.loc[signal_audit["recommended_role"].astype(str).isin(["primary", "primary_with_qc"]), "signal_stream"].astype(str).tolist()
+            limited = signal_audit.loc[signal_audit["recommended_role"].astype(str).isin(["secondary_only", "secondary_validation", "subset_only", "not_primary", "not_recommended"]), "signal_stream"].astype(str).tolist()
             pieces = []
             if primary:
-                pieces.append("primary HR support is carried by " + ", ".join(self._fmt_cell(x) for x in primary))
+                pieces.append("claim-supporting device streams are " + ", ".join(self._fmt_cell(x) for x in primary))
             if limited:
-                pieces.append("limited HR streams are " + ", ".join(self._fmt_cell(x) for x in limited))
+                pieces.append("audit-only or limited streams are " + ", ".join(self._fmt_cell(x) for x in limited))
             if pieces:
-                hr_summary = " In the current release, " + "; ".join(pieces) + "."
+                modality_summary = " In the current release, " + "; ".join(pieces) + "."
         synopsis = self._stage_panel(
             "Synopsis",
             (
-                "This cohort report is the final synthesis layer of the CLTR pipeline: session timelines are aligned first, modality-specific minute summaries are built next, support and agreement are audited before interpretation, and only then are cohort-level patterns, contrasts, and device conclusions presented."
-                + hr_summary
+                "This cohort report is the final synthesis layer of the CLTR pipeline: session timelines are aligned first, modality-specific minute summaries are built next, the full Empatica and BIOPAC stream inventory is audited, comparable and source-only modalities are separated, and only then are cohort-level patterns, contrasts, and device conclusions presented."
+                + modality_summary
+                + " The overview tables distinguish the full stream inventory from the narrower directly comparable subset so the paired-device agreement layer is not mistaken for the full modality picture."
                 + " "
                 + (
-                    "The study includes enough sessions and participants for cross-session comparison, but the signal audit below should still be read as part of the result itself, because device adequacy and disagreement determine which endpoints can be defended scientifically."
+                    "The study includes enough sessions and participants for cross-session comparison, but the stream inventory, signal audit, and pathway tables below should still be read as part of the result itself, because device adequacy and disagreement determine which endpoints can be defended scientifically."
                     if inferential
                     else "The current sample should still be read as descriptive and support-gated rather than fully inferential."
                 )
@@ -6156,21 +9569,39 @@ window.addEventListener('resize', resizePlots); requestAnimationFrame(resizePlot
             else "The current sample is still relatively small, so the cohort result layer should be read as descriptive and support-gated rather than inferential."
         )
         return {
-            "raw": self._section_lead_list(
-                "How To Read The Measured Trends",
+            "subjective_behavioral": self._section_lead_list(
+                "Questionnaire Responses And Fan Behavior At A Glance",
                 [
-                    "These figures show cohort-level observed trajectories and condition-stratified traces before support-gated endpoint reduction is applied.",
-                    "Visual ribbons and condition traces are descriptive summaries of available session support, not inferential estimates.",
-                    "Differences in line continuity or spread can reflect support density and condition balance as much as physiology or comfort dynamics.",
+                    "This section brings together participant questionnaire responses and fan-setting behavior, showing both the raw observations and the summarized condition patterns.",
+                    "Questionnaire panels should be read as ordinal response summaries collected at specific survey moments, not as continuous physiological signals.",
+                    "Fan-control and fan-current panels provide behavioral context for how participants interacted with the experimental environment over time.",
+                ],
+            ),
+            "physiological": self._section_lead_list(
+                "Physiological Signals At A Glance",
+                [
+                    "This section brings together the physiological signals captured by Empatica and BIOPAC, including both raw cohort views and condition-level summaries.",
+                    "These figures should be read as descriptive summaries of measured support, signal behavior, and cross-condition patterns rather than as stand-alone inferential results.",
+                    "Where scenario figures are shown, they distinguish the full audited signal set from the subset retained for claim-supporting interpretation after the modality audit.",
+                ],
+            ),
+            "environmental": self._section_lead_list(
+                "Environmental Conditions At A Glance",
+                [
+                    "This section summarizes the indoor and outdoor environmental conditions measured during the study, including both time-aligned traces and condition-level summaries.",
+                    "These figures provide the physical context for the participant responses and physiological signals, showing how air temperature, air movement, humidity, and related ambient conditions varied across the protocol.",
+                    "Environmental panels are descriptive context figures and are intended to be read alongside the questionnaire and physiological sections rather than as stand-alone outcome measures.",
                 ],
             ),
             "analyzed": self._section_lead_list(
-                "How To Read The Derived Results",
+                "Scientific Results And Modeling At A Glance",
                 [
                     derived_opening,
-                    "Condition-phase values are descriptive medians across available session summaries, not model-based cohort effects.",
-                    "Reference-phase deltas are within-condition descriptive departures from the earliest supported phase for each endpoint.",
-                    "Session-sign agreement quantifies directional consistency across sessions within a condition; it is not a formal reproducibility coefficient.",
+                    "This chapter is structured as a policy-gated scientific result layer: aligned readiness and feature registries appear first, then support-screened descriptive matrices, then inferential models, temporal lag evidence, threshold-response fits, validation-aware predictive benchmarks, decision-layer summaries, and robustness checks.",
+                    "Condition-phase values and delta matrices remain descriptive views of the endpoint layer, while the contrast and mixed-effects panels provide the inferential model-based layer under explicit eligibility gates.",
+                    "All-source versus valid-only scenario matrices are retained here as sensitivity views so modality-inclusion effects remain explicit rather than hidden behind a single result table.",
+                    "Pattern and participant-profile figures remain in the chapter to expose recurrent motifs and heterogeneity, so cohort means are not mistaken for uniform participant behavior.",
+                    "Predictive benchmarks should be read as multimodal generalization checks under explicit holdout schemes rather than as deployment-ready classifiers.",
                     sample_reading,
                 ],
             ),
@@ -6215,15 +9646,7 @@ window.addEventListener('resize', resizePlots); requestAnimationFrame(resizePlot
                             continue
                 condition_labels = set(CONDITION_ORDER)
                 for ax in getattr(fig, "axes", []):
-                    legend = ax.get_legend()
-                    if legend is None:
-                        continue
-                    labels = [text.get_text().strip() for text in legend.get_texts() if text.get_text().strip()]
-                    if len(labels) > 1 and set(labels).issubset(condition_labels):
-                        if hasattr(legend, "set_ncols"):
-                            legend.set_ncols(len(labels))
-                        else:
-                            legend._ncols = len(labels)
+                    self._normalize_legend_layout(ax)
                     for line in ax.get_lines():
                         try:
                             current = float(line.get_linewidth())

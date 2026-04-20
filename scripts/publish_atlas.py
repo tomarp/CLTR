@@ -256,10 +256,14 @@ def publish_atlas(results_dir: str | Path, docs_atlas_dir: str | Path, target: s
         if src.exists():
             shutil.copytree(src, target_dir / name)
 
-    work_root = reports_dir / "work"
-    atlas_index_src = work_root / "index.html"
-    if not atlas_index_src.exists():
-        raise FileNotFoundError(f"Atlas entry HTML not found: {atlas_index_src}")
+    atlas_index_candidates = [
+        reports_dir / "work" / "index.html",
+        reports_dir / "index.html",
+    ]
+    atlas_index_src = next((path for path in atlas_index_candidates if path.exists()), None)
+    if atlas_index_src is None:
+        checked = ", ".join(str(path) for path in atlas_index_candidates)
+        raise FileNotFoundError(f"Atlas entry HTML not found. Checked: {checked}")
 
     atlas_index_target = target_dir / "index.html"
     shutil.copy2(atlas_index_src, atlas_index_target)
