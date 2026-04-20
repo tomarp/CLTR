@@ -41,6 +41,7 @@
     body.theme-dark .entrySwitch { background:rgba(30,41,59,0.5); border-color:rgba(71,85,105,0.4); }
     body.theme-dark .entryOption { color:#e5edf7; background:rgba(255,255,255,0.06); border-color:rgba(71,85,105,0.35); }
     body.theme-dark .entryOption.isPrimary { background:#f8fafc; color:#172033; }
+    body.theme-dark .entryOption.entryOption--radio { border-color:rgba(147,197,253,0.44); }
     body.theme-dark .themeToggleIconDark { display:none; }
     body.theme-dark .themeToggleIconLight { display:inline; }
     .landing { display:grid; place-items:center; }
@@ -60,11 +61,14 @@
     .introLabel { margin:0 0 8px; color:#dbeafe; font:700 0.72rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:0.14em; text-transform:uppercase; }
     .introText { margin:0; color:#eff6ff; line-height:1.66; font-size:0.96rem; }
     .entrySwitch { display:inline-flex; align-items:center; gap:10px; margin-top:22px; padding:10px; border-radius:999px; background:rgba(255,255,255,0.14); border:1px solid rgba(219,234,254,0.24); box-shadow:inset 0 1px 0 rgba(255,255,255,0.14); }
-    .entryOption { position:relative; display:inline-flex; align-items:center; gap:10px; min-height:50px; padding:0 18px; border-radius:999px; text-decoration:none; color:#eff6ff; background:rgba(255,255,255,0.08); border:1px solid rgba(219,234,254,0.18); font:700 0.96rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .entryOption { position:relative; display:inline-flex; align-items:center; gap:10px; min-height:50px; padding:0 18px; border-radius:999px; box-sizing:border-box; text-decoration:none; color:#eff6ff; background:rgba(255,255,255,0.08); border:1px solid rgba(219,234,254,0.18); font:700 0.96rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     .entryOption:hover { background:rgba(255,255,255,0.18); border-color:rgba(255,255,255,0.36); }
     .entryOption::before { content:""; width:14px; height:14px; border-radius:999px; border:2px solid rgba(239,246,255,0.84); box-sizing:border-box; }
     .entryOption.isPrimary { background:#f8fafc; color:#172033; border-color:#ffffff; box-shadow:0 14px 30px rgba(15,23,42,0.18); }
     .entryOption.isPrimary::before { border-color:#172033; box-shadow:inset 0 0 0 3px #f8fafc; background:#172033; }
+    .entryOption.entryOption--radio { gap:12px; min-height:50px; padding:0 18px; border:1px solid rgba(191,219,254,0.54); background:linear-gradient(180deg,rgba(255,255,255,0.24) 0%,rgba(255,255,255,0.12) 100%); color:#f8fafc; box-shadow:0 16px 34px rgba(8,47,73,0.18); }
+    .entryOption.entryOption--radio:hover { border-color:rgba(255,255,255,0.72); background:linear-gradient(180deg,rgba(255,255,255,0.32) 0%,rgba(255,255,255,0.16) 100%); }
+    .entryOption.entryOption--radio::before { width:16px; height:16px; border:4px solid rgba(255,255,255,0.9); box-shadow:0 0 0 3px rgba(191,219,254,0.34); background:#f59e0b; }
     .sectionGrid { width:min(100%, 1040px); display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
     .infoPanel { text-align:left; }
     .infoEyebrow { margin:0 0 10px; color:#64748b; font:700 0.72rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:0.14em; text-transform:uppercase; }
@@ -141,8 +145,18 @@
           </div>
           <div class="entrySwitch" aria-label="Primary entry points">
             <a class="entryOption isPrimary" href="./atlas/index.html">Atlas</a>
-            <a class="entryOption" href="./prediction.html">ML Models</a>
+            <a class="entryOption entryOption--radio" href="./prediction.html">Modeling</a>
           </div>
+        </section>
+        <section class="roleGrid">
+          <section class="panel roleCard">
+            <p class="roleCode">IRP1</p>
+            <h2 class="roleTitle">Steady-state neurological reaction and perception</h2>
+          </section>
+          <section class="panel roleCard">
+            <p class="roleCode">IRP2</p>
+            <h2 class="roleTitle">Acute dynamic physiological reaction and perception</h2>
+          </section>
         </section>
         <section class="sectionGrid">
           <section class="panel infoPanel">
@@ -156,16 +170,6 @@
             <p class="infoText">The study combines continuous physiological signals, environmental measurements, repeated thermal ratings, and structured fan-cooling and rewarming phases to produce a richer map of indoor human response for thermal comfort, chrono-physiology, and intelligent building control research.</p>
           </section>
         </section>
-        <section class="roleGrid">
-          <section class="panel roleCard">
-            <p class="roleCode">IRP1</p>
-            <h2 class="roleTitle">Steady-state neurological reaction and perception</h2>
-          </section>
-          <section class="panel roleCard">
-            <p class="roleCode">IRP2</p>
-            <h2 class="roleTitle">Acute dynamic physiological reaction and perception</h2>
-          </section>
-        </section>
         <footer class="panel homeFooter">
           <div class="footerMarks">
             <div class="footerMark"><img class="footerMarkImage" src="./assets/logos/La_Rochelle.png" alt="La Rochelle Universite logo"></div>
@@ -177,7 +181,7 @@
       </section>
     </section>
   </main>
-  <div class="copyrightNote">&copy; 2026 Puneet Tomar. All rights reserved.</div>
+  <div class="copyrightNote">&copy; 2026 Tomar &amp; Elkounni. All rights reserved.</div>
 </body>
 <script>
 const themeToggle=document.getElementById('themeToggle');

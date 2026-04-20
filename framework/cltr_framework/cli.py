@@ -25,6 +25,8 @@ def build_parser() -> argparse.ArgumentParser:
     common.add_argument("--participants", nargs="*", default=None)
     common.add_argument("--conditions", nargs="*", default=None)
     common.add_argument("--modalities", nargs="*", default=None)
+    common.add_argument("--reuse-existing", action="store_true")
+    common.add_argument("--report-scope", choices=["all", "cohort", "sessions"], default="all")
 
     sub.add_parser("validate", parents=[common])
     sub.add_parser("preprocess", parents=[common])
@@ -61,6 +63,8 @@ def main() -> None:
             participants=args.participants,
             conditions=args.conditions,
             modalities=args.modalities,
+            reuse_existing=args.reuse_existing,
+            report_scope=args.report_scope,
         )
     elif args.command == "run-all":
         pipeline.run_all(

@@ -94,24 +94,15 @@ framework/
 
 ## Environment Setup
 
-The framework is intended to run in an isolated Python environment.
+The framework is intended to run in the shared project conda environment.
 
-### Local installation
+### Environment setup
 
-```bash
-cd framework
-python -m venv .venv
-source .venv/bin/activate
-pip install -e .
-```
-
-### Conda-based workflow
-
-If you manage environments with conda, activate the target environment first and then install the framework in editable mode:
+Activate the `cltr` conda environment and install the framework in editable mode:
 
 ```bash
 cd framework
-conda activate <env_name>
+conda activate cltr
 pip install -e .
 ```
 
@@ -238,13 +229,17 @@ The publisher copies only:
 - `reports/cohort/`
 - `reports/sessions/`
 
+The atlas landing page is currently sourced from:
+
+- `reports/work/index.html`
+
 It does not publish the full raw results tree. That boundary keeps GitHub Pages focused on web-facing report artifacts.
 
 ## Typical End-To-End Example
 
 ```bash
 cd framework
-source .venv/bin/activate
+conda activate cltr
 
 python -m cltr_framework run-all \
   --dataset-root ../../dataset_full \

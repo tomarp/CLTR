@@ -464,32 +464,46 @@ class SessionPreprocessor:
         ]:
             minute[flag] = int(minute[metric].sum() >= self.config.runtime.min_sensor_overlap_minutes)
 
+        motion_flag = pd.Series(False, index=minute.index)
+        if "empatica_enmo_mean_g" in minute.columns:
+            motion_flag = motion_flag | (to_numeric(minute["empatica_enmo_mean_g"]).fillna(0) > 0.08)
+        if "empatica_steps" in minute.columns:
+            motion_flag = motion_flag | (to_numeric(minute["empatica_steps"]).fillna(0) >= 15)
+        if "empatica_acc_mean_g" in minute.columns:
+            motion_flag = motion_flag | (to_numeric(minute["empatica_acc_mean_g"]).fillna(0) > 1.30)
+
         minute["quality_empatica_hr"] = (
             minute["empatica_hr_mean_bpm"].notna()
             & to_numeric(minute["empatica_hr_mean_bpm"]).between(40, 180)
             & (to_numeric(minute["empatica_hr_sd_bpm"]).fillna(0) <= 20)
+            & ~motion_flag
         ).astype(int) if {"empatica_hr_mean_bpm", "empatica_hr_sd_bpm"} <= set(minute.columns) else 0
         minute["quality_empatica_eda"] = (
             minute["empatica_eda_mean_uS"].notna()
             & to_numeric(minute["empatica_eda_mean_uS"]).between(0, 40)
             & (to_numeric(minute["empatica_eda_p95_uS"]).fillna(to_numeric(minute["empatica_eda_mean_uS"])) >= to_numeric(minute["empatica_eda_mean_uS"]).fillna(-np.inf))
+            & ~motion_flag
         ).astype(int) if {"empatica_eda_mean_uS", "empatica_eda_p95_uS"} <= set(minute.columns) else 0
         minute["quality_empatica_temp"] = (
             minute["empatica_temp_mean_C"].notna()
             & to_numeric(minute["empatica_temp_mean_C"]).between(20, 40)
             & (to_numeric(minute["empatica_temp_sd_C"]).fillna(0) <= 2.5)
+            & ~motion_flag
         ).astype(int) if {"empatica_temp_mean_C", "empatica_temp_sd_C"} <= set(minute.columns) else 0
         minute["quality_biopac_hr"] = (
             minute["biopac_hr_mean_bpm"].notna()
             & to_numeric(minute["biopac_hr_mean_bpm"]).between(40, 180)
+            & ~motion_flag
         ).astype(int) if "biopac_hr_mean_bpm" in minute.columns else 0
         minute["quality_biopac_eda"] = (
             minute["biopac_eda_mean_uS"].notna()
             & to_numeric(minute["biopac_eda_mean_uS"]).between(0, 60)
+            & ~motion_flag
         ).astype(int) if "biopac_eda_mean_uS" in minute.columns else 0
         minute["quality_biopac_temp"] = (
             minute["biopac_temp_chest_mean_C"].notna()
             & to_numeric(minute["biopac_temp_chest_mean_C"]).between(20, 42)
+            & ~motion_flag
         ).astype(int) if "biopac_temp_chest_mean_C" in minute.columns else 0
         minute["quality_empatica_bvp"] = (
             minute["empatica_bvp_mean"].notna()

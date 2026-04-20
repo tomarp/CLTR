@@ -111,8 +111,7 @@ From [`framework/`](./framework):
 
 ```bash
 cd framework
-python -m venv .venv
-source .venv/bin/activate
+conda activate cltr
 pip install -e .
 ```
 
@@ -155,6 +154,10 @@ The publisher currently copies:
 - `reports/work/`
 - `reports/cohort/`
 - `reports/sessions/`
+
+The atlas entry point is currently read from:
+
+- `reports/work/index.html`
 
 and writes the public atlas entry point to:
 
