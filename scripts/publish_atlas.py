@@ -33,6 +33,21 @@ def _rewrite_text(path: Path, replacements: list[tuple[str, str]]) -> None:
     path.write_text(text, encoding="utf-8")
 
 
+def _ensure_logo_image_style(text: str) -> str:
+    if ".logoImage {" in text:
+        return text
+    logo_rule = ".logoMark { width:58px; height:58px; object-fit:contain; display:block; flex-shrink:0; }"
+    replacement = (
+        ".logoMark,.logoImage { width:58px; height:58px; object-fit:contain; display:block; flex-shrink:0; }"
+    )
+    if logo_rule in text:
+        return text.replace(logo_rule, replacement, 1)
+    legacy_logo_rule = ".logoMark { width:58px; height:58px; display:block; flex-shrink:0; }"
+    if legacy_logo_rule in text:
+        return text.replace(legacy_logo_rule, replacement, 1)
+    return text.replace("</style>", replacement + "\n</style>", 1)
+
+
 def _ensure_hide_index_html(path: Path) -> None:
     if not path.exists():
         return
@@ -57,10 +72,7 @@ def _normalize_atlas_home_logo(path: Path) -> None:
     if not path.exists():
         return
     text = path.read_text(encoding="utf-8")
-    text = text.replace(
-        ".logoMark { width:58px; height:58px; display:block; flex-shrink:0; }",
-        ".logoImage { width:58px; height:58px; object-fit:contain; display:block; flex-shrink:0; }",
-    )
+    text = _ensure_logo_image_style(text)
     anchor_variants = (
         "<a class='logoLink' href='index.html' title='Open report index' aria-label='Open report index'>",
         "<a class='logoLink' href='./' title='Open report index' aria-label='Open report index'>",
@@ -86,10 +98,7 @@ def _sync_primary_header(path: Path, home_href: str, publication_href: str, logo
     if not path.exists():
         return
     text = path.read_text(encoding="utf-8")
-    text = text.replace(
-        ".logoMark { width:58px; height:58px; display:block; flex-shrink:0; }",
-        ".logoImage { width:58px; height:58px; object-fit:contain; display:block; flex-shrink:0; }",
-    )
+    text = _ensure_logo_image_style(text)
     anchor_variants = (
         "<a class='logoLink' href='index.html' title='Open report index' aria-label='Open report index'>",
         "<a class='logoLink' href='./' title='Open report index' aria-label='Open report index'>",
@@ -259,6 +268,9 @@ def publish_atlas(results_dir: str | Path, docs_atlas_dir: str | Path, target: s
 
     atlas_index_target = target_dir / "index.html"
     shutil.copy2(atlas_index_src, atlas_index_target)
+    sessions_index_src = reports_dir / "sessions_report.html"
+    if sessions_index_src.exists():
+        shutil.copy2(sessions_index_src, target_dir / "sessions_report.html")
     _rewrite_text(
         atlas_index_target,
         [
@@ -272,6 +284,12 @@ def publish_atlas(results_dir: str | Path, docs_atlas_dir: str | Path, target: s
     _ensure_atlas_footer_style(atlas_index_target)
     _ensure_hide_index_html(atlas_index_target)
     if target_dir == docs_atlas_dir:
+        sessions_report_target = target_dir / "sessions_report.html"
+        if sessions_report_target.exists():
+            _rewrite_text(sessions_report_target, [("../../work/index.html", "../index.html")])
+            _sync_primary_header(sessions_report_target, "../index.html", "../publication.html", "../assets/logos/cltr.png")
+            _ensure_primary_menu(sessions_report_target)
+            _ensure_hide_index_html(sessions_report_target)
         for html_path in (target_dir / "cohort").rglob("*.html"):
             _rewrite_text(html_path, [("../../work/index.html", "../../../index.html")])
             _sync_primary_header(html_path, "../../../index.html", "../../../publication.html", "../../../assets/logos/cltr.png")
@@ -283,6 +301,12 @@ def publish_atlas(results_dir: str | Path, docs_atlas_dir: str | Path, target: s
             _ensure_primary_menu(html_path)
             _ensure_hide_index_html(html_path)
     else:
+        sessions_report_target = target_dir / "sessions_report.html"
+        if sessions_report_target.exists():
+            _rewrite_text(sessions_report_target, [("../../work/index.html", "../../index.html")])
+            _sync_primary_header(sessions_report_target, "../../index.html", "../../publication.html", "../../assets/logos/cltr.png")
+            _ensure_primary_menu(sessions_report_target)
+            _ensure_hide_index_html(sessions_report_target)
         for html_path in (target_dir / "cohort").rglob("*.html"):
             _rewrite_text(html_path, [("../../work/index.html", "../../index.html")])
             _sync_primary_header(html_path, "../../index.html", "../../publication.html", "../../assets/logos/cltr.png")
