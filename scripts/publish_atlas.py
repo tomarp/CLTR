@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import shutil
 from pathlib import Path
 
@@ -172,6 +173,15 @@ def _ensure_primary_menu(path: Path) -> None:
     )
     if ".secondaryBarActions .menuPanel {" not in text:
         text = text.replace(".menuPanel.open { display:grid; gap:10px; }\n", ".menuPanel.open { display:grid; gap:10px; }\n" + secondary_menu_block, 1)
+    while True:
+        title_start = text.find("<h2 class='menuTitle'>")
+        if title_start == -1:
+            break
+        title_end = text.find("</h2>", title_start)
+        if title_end == -1:
+            break
+        title_end += len("</h2>")
+        text = text[:title_start] + text[title_end:]
     text = text.replace("body.theme-dark .menuPanel { background:rgba(15,23,42,0.96); border-color:rgba(71,85,105,0.4); }\n", "")
     text = text.replace(
         ".socialLinks { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }\n",
@@ -208,6 +218,32 @@ def _ensure_primary_menu(path: Path) -> None:
             text = text.replace("const sessionMenuButton", snippet + "const sessionMenuButton", 1)
         elif "</script>" in text:
             text = text.replace("</script>", snippet + "</script>", 1)
+    text = re.sub(
+        r"const (figure|session|chapter)MenuButton=document\.getElementById\('[^']+'\);"
+        r" const \1MenuPanel=document\.getElementById\('[^']+'\);\s*"
+        r"const close[A-Za-z]+=\(\)=>\{.*?\};\s*"
+        r"const toggle[A-Za-z]+=\(\)=>\{.*?\};\s*"
+        r"if\(\1MenuButton&&\1MenuPanel\)\{.*?\}\s*",
+        "",
+        text,
+        flags=re.DOTALL,
+    )
+    text = re.sub(r"^.*const (figure|session|chapter)MenuButton=document\.getElementById\(.*$\n?", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^.*const close(Figure|Session|Chapter)[A-Za-z]*=.*$\n?", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^.*const toggle(Figure|Session|Chapter)[A-Za-z]*=.*$\n?", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^.*if\((figure|session|chapter)MenuButton&&(figure|session|chapter)MenuPanel\)\{.*$\n?", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^.*MenuPanel\.querySelectorAll\('a'\)\.forEach\(link=>link\.addEventListener\('click', close(Figure|Session|Chapter)[A-Za-z]*\)\);.*$\n?", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^.*close(Figure|Session|Chapter)[A-Za-z]*\(\);.*$\n?", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^\);\s*$\n?", "", text, flags=re.MULTILINE)
+    if "const secondaryMenuButtons=[...document.querySelectorAll('.secondaryBarActions .menuButton[aria-controls]')];" not in text:
+        secondary_menu_snippet = (
+            "const secondaryMenuButtons=[...document.querySelectorAll('.secondaryBarActions .menuButton[aria-controls]')];\n"
+            "const closeSecondaryMenus=(exceptPanelId='')=>{secondaryMenuButtons.forEach((button)=>{const panelId=button.getAttribute('aria-controls');const panel=panelId?document.getElementById(panelId):null;if(!panel||panelId===exceptPanelId)return;panel.classList.remove('open');button.setAttribute('aria-expanded','false');});};\n"
+            "secondaryMenuButtons.forEach((button)=>{const panelId=button.getAttribute('aria-controls');const panel=panelId?document.getElementById(panelId):null;if(!panel)return;button.addEventListener('click',(event)=>{event.preventDefault();event.stopPropagation();const willOpen=!panel.classList.contains('open');closeSecondaryMenus();if(willOpen){panel.classList.add('open');button.setAttribute('aria-expanded','true');}else{panel.classList.remove('open');button.setAttribute('aria-expanded','false');}});panel.querySelectorAll('a').forEach((link)=>link.addEventListener('click',()=>{closeSecondaryMenus();button.setAttribute('aria-expanded','false');}));});\n"
+            "document.addEventListener('click',(event)=>{if(!event.target.closest('.secondaryBarActions'))closeSecondaryMenus();},true);\n"
+            "document.addEventListener('keydown',(event)=>{if(event.key==='Escape')closeSecondaryMenus();},true);\n"
+        )
+        text = text.replace("</script>", secondary_menu_snippet + "</script>", 1)
     path.write_text(text, encoding="utf-8")
 
 
