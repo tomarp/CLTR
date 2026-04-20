@@ -1,12 +1,22 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import shutil
 from pathlib import Path
 
 
 PUBLISH_DIRS = ("cohort", "sessions")
+COHORT_ROUTE_MAP = {
+    "cohort_report.html": "",
+    "cohort_ch01_overview_audit.html": "ch01/",
+    "cohort_ch02_subjective_behavioral.html": "ch02/",
+    "cohort_ch03_physiological.html": "ch03/",
+    "cohort_ch04_environmental.html": "ch04/",
+    "cohort_ch05_derived_results.html": "ch05/",
+    "cohort_ch06_relationships_validation.html": "ch06/",
+}
 
 
 def _redirect_html(target: str) -> str:
@@ -131,10 +141,14 @@ def _ensure_primary_menu(path: Path) -> None:
     if not path.exists():
         return
     text = path.read_text(encoding="utf-8")
+    text = text.replace(
+        ".mastheadActions { display:flex; align-items:center; gap:12px; flex-shrink:0; }\n",
+        ".mastheadActions { display:flex; align-items:center; justify-content:flex-end; gap:12px; flex:1 1 auto; min-width:0; }\n",
+    )
     if ".menuWrap {" not in text:
         text = text.replace(
-            ".mastheadActions { display:flex; align-items:center; gap:12px; flex-shrink:0; }\n",
-            ".mastheadActions { display:flex; align-items:center; gap:12px; flex-shrink:0; }\n"
+            ".mastheadActions { display:flex; align-items:center; justify-content:flex-end; gap:12px; flex:1 1 auto; min-width:0; }\n",
+            ".mastheadActions { display:flex; align-items:center; justify-content:flex-end; gap:12px; flex:1 1 auto; min-width:0; }\n"
             ".menuWrap { position:relative; display:flex; align-items:center; }\n",
             1,
         )
@@ -156,6 +170,10 @@ def _ensure_primary_menu(path: Path) -> None:
                 "</div></div>"
             )
             text = text[:social_start] + menu_block + text[social_end + len("</div>"):]
+    text = text.replace(
+        ".socialLinks { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }\n",
+        ".socialLinks { display:flex; align-items:center; justify-content:flex-end; gap:10px; flex-wrap:wrap; min-width:0; }\n",
+    )
     text = text.replace(
         ".menuPanel { position:absolute; right:0; top:calc(100% + 10px); width:min(420px, calc(100vw - 32px)); max-height:min(70vh, 720px); overflow:auto; padding:14px 12px; background:rgba(255,255,255,0.97); border:1px solid rgba(148,163,184,0.22); border-radius:22px; box-shadow:0 22px 54px rgba(23,32,51,0.16); backdrop-filter:blur(18px); display:none; }\n",
         ".menuPanel { position:absolute; right:0; top:calc(100% + 10px); width:min(220px, calc(100vw - 32px)); max-height:min(70vh, 720px); overflow:auto; padding:0; background:transparent; border:0; border-radius:0; box-shadow:none; backdrop-filter:none; display:none; }\n",
@@ -185,10 +203,14 @@ def _ensure_primary_menu(path: Path) -> None:
     text = text.replace("body.theme-dark .menuPanel { background:rgba(15,23,42,0.96); border-color:rgba(71,85,105,0.4); }\n", "")
     text = text.replace(
         ".socialLinks { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }\n",
-        ".socialLinks { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }\n"
+        ".socialLinks { display:flex; align-items:center; justify-content:flex-end; gap:10px; flex-wrap:wrap; min-width:0; }\n"
         ".menuPanel .socialLinks { display:grid; gap:8px; }\n"
         ".menuPanel .socialLink { width:100%; min-height:40px; justify-content:flex-start; padding:10px 12px; border-radius:14px; font-size:0.82rem; line-height:1.2; box-sizing:border-box; box-shadow:0 10px 20px rgba(23,32,51,0.12); background:linear-gradient(135deg,rgba(255,255,255,0.98) 0%,rgba(255,243,224,0.98) 52%,rgba(255,232,214,0.98) 100%); border:1px solid rgba(251,146,60,0.34); }\n",
         1,
+    )
+    text = text.replace(
+        ".menuButton { appearance:none; border:1px solid rgba(148,163,184,0.28); background:rgba(255,255,255,0.92); color:#172033; border-radius:999px; min-height:42px; padding:0 14px; display:inline-flex; align-items:center; gap:10px; font:700 0.82rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; letter-spacing:0.04em; cursor:pointer; box-shadow:0 12px 28px rgba(23,32,51,0.08); }\n",
+        ".menuButton { appearance:none; border:1px solid rgba(148,163,184,0.28); background:linear-gradient(180deg,rgba(255,255,255,0.96) 0%,rgba(255,247,237,0.96) 100%); color:#172033; border-radius:999px; min-height:44px; padding:0 14px; display:inline-flex; align-items:center; gap:10px; font:700 0.82rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; letter-spacing:0.04em; cursor:pointer; box-shadow:0 12px 28px rgba(23,32,51,0.08); }\n",
     )
     text = text.replace(
         "body.theme-dark .socialLink,body.theme-dark .themeToggle,body.theme-dark .menuButton { color:#f8fafc; background:linear-gradient(180deg,rgba(30,41,59,0.96) 0%,rgba(15,23,42,0.96) 100%); border-color:rgba(71,85,105,0.5); }\n",
@@ -196,16 +218,86 @@ def _ensure_primary_menu(path: Path) -> None:
         "body.theme-dark .menuPanel .socialLink { background:linear-gradient(135deg,rgba(30,41,59,0.98) 0%,rgba(37,99,235,0.34) 58%,rgba(15,23,42,0.98) 100%); border-color:rgba(96,165,250,0.34); box-shadow:0 10px 22px rgba(2,6,23,0.34); }\n",
         1,
     )
+    text = text.replace("body.theme-dark .menuPanel { background:rgba(15,23,42,0.96); border-color:rgba(71,85,105,0.4); }\n", "")
     text = text.replace(
         ".menuTitle { margin:0 0 2px; font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; font-size:0.78rem; letter-spacing:0.14em; text-transform:uppercase; color:#64748b; }\n",
         "",
     )
     text = text.replace("body.theme-dark .menuTitle { color:#94a3b8; }\n", "")
+    text = text.replace(".menuTitle { display:none; }\n", "")
+    text = text.replace(
+        "@media (max-width:860px) { .primaryBarInner { flex-wrap:wrap; padding:12px 20px; } .mastheadActions { width:100%; justify-content:flex-end; } }\n",
+        "",
+    )
+    text = text.replace(
+        "@media (max-width:640px) { .mastheadActions { width:auto; } .menuPanel { right:0; left:auto; width:min(280px, calc(100vw - 24px)); } .logoMark { width:52px; height:52px; } .logoWordmark { height:52px; font-size:1.9rem; } }\n",
+        "",
+    )
     text = text.replace(
         "@media (max-width:1000px) { .primaryBarInner,.secondaryBarInner,.hero,.grid,.heroFacts { grid-template-columns:1fr; } .primaryBarInner,.secondaryBarInner { display:grid; padding:12px 20px; } .mastheadActions,.secondaryBarActions { justify-content:space-between; } .secondaryBarText { white-space:normal; } .menuPanel { right:auto; left:0; width:min(100%, 420px); } .heroSticky { position:static; } .socialLinks { order:2; } }\n",
         "@media (max-width:1000px) { .primaryBarInner,.secondaryBarInner,.hero,.grid,.heroFacts { grid-template-columns:1fr; } .primaryBarInner,.secondaryBarInner { display:grid; padding:12px 20px; } .mastheadActions,.secondaryBarActions { justify-content:space-between; } .secondaryBarText { white-space:normal; } .mastheadActions .menuPanel { left:auto; right:0; width:min(220px, calc(100vw - 24px)); } .secondaryBarActions .menuPanel { right:auto; left:0; width:min(100%, 420px); } .heroSticky { position:static; } .secondaryBarActions .socialLinks { order:2; } }\n",
         1,
     )
+    if "@media (max-width:860px) { .primaryBarInner { flex-wrap:wrap; padding:12px 20px; } .mastheadActions { width:100%; justify-content:flex-end; } }\n" not in text:
+        text = text.replace(
+            "@media (max-width:1000px) { .primaryBarInner,.secondaryBarInner,.hero,.grid,.heroFacts { grid-template-columns:1fr; } .primaryBarInner,.secondaryBarInner { display:grid; padding:12px 20px; } .mastheadActions,.secondaryBarActions { justify-content:space-between; } .secondaryBarText { white-space:normal; } .mastheadActions .menuPanel { left:auto; right:0; width:min(220px, calc(100vw - 24px)); } .secondaryBarActions .menuPanel { right:auto; left:0; width:min(100%, 420px); } .heroSticky { position:static; } .secondaryBarActions .socialLinks { order:2; } }\n",
+            "@media (max-width:1000px) { .primaryBarInner,.secondaryBarInner,.hero,.grid,.heroFacts { grid-template-columns:1fr; } .primaryBarInner,.secondaryBarInner { display:grid; padding:12px 20px; } .mastheadActions,.secondaryBarActions { justify-content:space-between; } .secondaryBarText { white-space:normal; } .mastheadActions .menuPanel { left:auto; right:0; width:min(220px, calc(100vw - 24px)); } .secondaryBarActions .menuPanel { right:auto; left:0; width:min(100%, 420px); } .heroSticky { position:static; } .secondaryBarActions .socialLinks { order:2; } }\n"
+            "@media (max-width:860px) { .primaryBarInner { flex-wrap:wrap; padding:12px 20px; } .mastheadActions { width:100%; justify-content:flex-end; } }\n"
+            "@media (max-width:640px) { .mastheadActions { width:auto; } .menuPanel { right:0; left:auto; width:min(280px, calc(100vw - 24px)); } .logoMark,.logoImage { width:52px; height:52px; } .logoWordmark { height:52px; font-size:1.9rem; } }\n",
+            1,
+        )
+    text = re.sub(
+        r"(?m)^\.menuButton \{[^}]*\}\n",
+        ".menuButton { appearance:none; border:1px solid rgba(148,163,184,0.28); background:linear-gradient(180deg,rgba(255,255,255,0.96) 0%,rgba(255,247,237,0.96) 100%); color:#172033; border-radius:999px; min-height:44px; padding:0 14px; display:inline-flex; align-items:center; gap:10px; font:700 0.82rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; letter-spacing:0.04em; cursor:pointer; box-shadow:0 12px 28px rgba(23,32,51,0.08); }\n",
+        text,
+        count=1,
+    )
+    text = re.sub(
+        r"\.menuButton:hover \{[^}]*\}\n",
+        ".menuButton:hover { background:#ffffff; border-color:#fb923c; box-shadow:0 16px 34px rgba(23,32,51,0.12); transform:translateY(-1px); }\n",
+        text,
+        count=1,
+    )
+    if ".menuPanel .socialLinks {" not in text:
+        text = text.replace(
+            ".socialLink.isDisabled { pointer-events:none; opacity:0.58; }\n",
+            ".socialLink.isDisabled { pointer-events:none; opacity:0.58; }\n"
+            ".menuPanel .socialLinks { display:grid; gap:8px; }\n"
+            ".menuPanel .socialLink { width:100%; min-height:40px; justify-content:flex-start; padding:10px 12px; border-radius:14px; font-size:0.82rem; line-height:1.2; box-sizing:border-box; box-shadow:0 10px 20px rgba(23,32,51,0.12); background:linear-gradient(135deg,rgba(255,255,255,0.98) 0%,rgba(255,243,224,0.98) 52%,rgba(255,232,214,0.98) 100%); border:1px solid rgba(251,146,60,0.34); }\n",
+            1,
+        )
+    text = re.sub(
+        r"(?m)^body\.theme-dark \.socialLink,body\.theme-dark \.themeToggle,body\.theme-dark \.menuButton \{[^}]*\}\n",
+        "body.theme-dark .socialLink,body.theme-dark .themeToggle,body.theme-dark .menuButton { color:#f8fafc; background:linear-gradient(180deg,rgba(30,41,59,0.96) 0%,rgba(15,23,42,0.96) 100%); border-color:rgba(71,85,105,0.5); }\n",
+        text,
+        count=1,
+    )
+    text = text.replace(
+        ".secondaryBarActions body.theme-dark .secondaryBarActions .menuPanel { background:rgba(15,23,42,0.96); border-color:rgba(71,85,105,0.4); }\n",
+        "body.theme-dark .secondaryBarActions .menuPanel { background:rgba(15,23,42,0.96); border-color:rgba(71,85,105,0.4); }\n",
+    )
+    text = text.replace(
+        ".menuPanel { right:auto; left:0; width:min(100%, 420px); }",
+        ".mastheadActions .menuPanel { left:auto; right:0; width:min(220px, calc(100vw - 24px)); }",
+    )
+    text = text.replace(
+        ".socialLinks { order:2; }",
+        ".secondaryBarActions .socialLinks { order:2; }",
+    )
+    text = re.sub(
+        r"@media \(max-width:1000px\) \{ ([^}]*) \.menuPanel \{ right:auto; left:0; width:min\(100%, 420px\); \} ([^}]*) \.socialLinks \{ order:2; \} ([^}]*) \}\n",
+        r"@media (max-width:1000px) { \1 .mastheadActions .menuPanel { left:auto; right:0; width:min(220px, calc(100vw - 24px)); } \2 .secondaryBarActions .socialLinks { order:2; } \3 }\n",
+        text,
+        count=1,
+    )
+    if "@media (max-width:860px) { .primaryBarInner { flex-wrap:wrap; padding:12px 20px; } .mastheadActions { width:100%; justify-content:flex-end; } }\n" not in text:
+        text = text.replace(
+            "</style>",
+            "@media (max-width:860px) { .primaryBarInner { flex-wrap:wrap; padding:12px 20px; } .mastheadActions { width:100%; justify-content:flex-end; } }\n"
+            "@media (max-width:640px) { .mastheadActions { width:auto; } .menuPanel { right:0; left:auto; width:min(280px, calc(100vw - 24px)); } .logoMark,.logoImage { width:52px; height:52px; } .logoWordmark { height:52px; font-size:1.9rem; } }\n"
+            "</style>",
+            1,
+        )
     if "const siteMenuButton=document.getElementById('siteMenuButton');" not in text:
         snippet = (
             "const siteMenuButton=document.getElementById('siteMenuButton');\n"
@@ -269,6 +361,115 @@ def _ensure_atlas_footer_style(path: Path) -> None:
     path.write_text(text, encoding="utf-8")
 
 
+def _relative_href(from_dir: Path, to_path: Path, *, directory: bool = False) -> str:
+    rel = Path(os.path.relpath(to_path, from_dir)).as_posix()
+    if directory:
+        if rel == ".":
+            return "./"
+        rel_dir = Path(os.path.relpath(to_path.parent, from_dir)).as_posix()
+        return "./" if rel_dir == "." else rel_dir.rstrip("/") + "/"
+    return rel
+
+
+def _relative_dir_href(from_dir: Path, to_dir: Path) -> str:
+    rel = Path(os.path.relpath(to_dir, from_dir)).as_posix()
+    return "./" if rel == "." else rel.rstrip("/") + "/"
+
+
+def _canonicalize_cohort_routes(cohort_dir: Path) -> None:
+    for legacy_name, route in COHORT_ROUTE_MAP.items():
+        legacy_path = cohort_dir / legacy_name
+        canonical_dir = cohort_dir / route if route else cohort_dir
+        canonical_path = canonical_dir / "index.html"
+        if legacy_path.exists() and not canonical_path.exists():
+            canonical_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(legacy_path, canonical_path)
+
+
+def _rewrite_work_index_links(path: Path, replacement: str) -> None:
+    if not path.exists():
+        return
+    text = path.read_text(encoding="utf-8")
+    updated = re.sub(r"(?:\.\./)+work/index\.html", replacement, text)
+    if updated != text:
+        path.write_text(updated, encoding="utf-8")
+
+
+def _rewrite_cohort_links(path: Path, target_dir: Path) -> None:
+    if not path.exists():
+        return
+    text = path.read_text(encoding="utf-8")
+    route_targets: list[tuple[str, str]] = []
+    for legacy_name, route in COHORT_ROUTE_MAP.items():
+        canonical_path = (target_dir / "cohort" / route / "index.html") if route else (target_dir / "cohort" / "index.html")
+        canonical_href = _relative_href(path.parent, canonical_path)
+        if route:
+            route_targets.append((rf"(?:cohort/{re.escape(legacy_name)}|cohort/{re.escape(route)}index\.html|cohort/{re.escape(route)})", canonical_href))
+        else:
+            route_targets.append((r"(?:cohort/cohort_report\.html|cohort/index\.html|cohort/)", canonical_href))
+    for pattern, replacement in route_targets:
+        text = re.sub(rf"((?:href|src)=['\"]){pattern}(['\"])", rf"\1{replacement}\2", text)
+    for legacy_name, route in COHORT_ROUTE_MAP.items():
+        canonical_path = (target_dir / "cohort" / route / "index.html") if route else (target_dir / "cohort" / "index.html")
+        canonical_href = _relative_href(path.parent, canonical_path)
+        text = re.sub(rf"((?:href|src)=['\"]){re.escape(legacy_name)}(['\"])", rf"\1{canonical_href}\2", text)
+    path.write_text(text, encoding="utf-8")
+
+
+def _rewrite_sessions_links(path: Path, target_dir: Path) -> None:
+    if not path.exists():
+        return
+    text = path.read_text(encoding="utf-8")
+    sessions_href = _relative_href(path.parent, target_dir / "sessions_report.html")
+    text = re.sub(r"((?:href|src)=['\"])(?:\.\./)*sessions_report\.html", rf"\1{sessions_href}", text)
+    path.write_text(text, encoding="utf-8")
+
+
+def _rewrite_cohort_figure_links(path: Path, target_dir: Path) -> None:
+    if not path.exists():
+        return
+    text = path.read_text(encoding="utf-8")
+    figures_href = _relative_dir_href(path.parent, target_dir / "cohort" / "figures")
+    replacements = [
+        ("src='figures/", f"src='{figures_href}"),
+        ('src="figures/', f'src="{figures_href}'),
+        ("href='figures/", f"href='{figures_href}"),
+        ('href="figures/', f'href="{figures_href}'),
+    ]
+    for old, new in replacements:
+        text = text.replace(old, new)
+    path.write_text(text, encoding="utf-8")
+
+
+def _published_site_targets(target_dir: Path, docs_atlas_dir: Path) -> tuple[Path, Path, Path]:
+    if target_dir == docs_atlas_dir:
+        docs_root = docs_atlas_dir.parent
+    else:
+        docs_root = docs_atlas_dir
+    return (
+        docs_root / "index.html",
+        docs_root / "publication.html",
+        docs_root / "assets" / "logos" / "cltr.png",
+    )
+
+
+def _finalize_published_html(path: Path, target_dir: Path, docs_atlas_dir: Path) -> None:
+    if not path.exists():
+        return
+    site_home, publication, logo = _published_site_targets(target_dir, docs_atlas_dir)
+    home_href = _relative_href(path.parent, site_home)
+    publication_href = _relative_href(path.parent, publication)
+    logo_src = _relative_href(path.parent, logo)
+    _rewrite_work_index_links(path, home_href)
+    _rewrite_cohort_links(path, target_dir)
+    _rewrite_sessions_links(path, target_dir)
+    if target_dir / "cohort" in path.parents:
+        _rewrite_cohort_figure_links(path, target_dir)
+    _sync_primary_header(path, home_href, publication_href, logo_src)
+    _ensure_primary_menu(path)
+    _ensure_hide_index_html(path)
+
+
 def publish_atlas(results_dir: str | Path, docs_atlas_dir: str | Path, target: str = "") -> dict[str, str]:
     results_dir = Path(results_dir).resolve()
     docs_atlas_dir = Path(docs_atlas_dir).resolve()
@@ -301,6 +502,9 @@ def publish_atlas(results_dir: str | Path, docs_atlas_dir: str | Path, target: s
     sessions_index_src = reports_dir / "sessions_report.html"
     if sessions_index_src.exists():
         shutil.copy2(sessions_index_src, target_dir / "sessions_report.html")
+    cohort_target_dir = target_dir / "cohort"
+    if cohort_target_dir.exists():
+        _canonicalize_cohort_routes(cohort_target_dir)
     _rewrite_text(
         atlas_index_target,
         [
@@ -309,6 +513,7 @@ def publish_atlas(results_dir: str | Path, docs_atlas_dir: str | Path, target: s
         ],
     )
     _normalize_atlas_home_logo(atlas_index_target)
+    _rewrite_cohort_links(atlas_index_target, target_dir)
     _sync_primary_header(atlas_index_target, "../index.html", "../publication.html", "../assets/logos/cltr.png")
     _ensure_primary_menu(atlas_index_target)
     _ensure_atlas_footer_style(atlas_index_target)
@@ -316,37 +521,19 @@ def publish_atlas(results_dir: str | Path, docs_atlas_dir: str | Path, target: s
     if target_dir == docs_atlas_dir:
         sessions_report_target = target_dir / "sessions_report.html"
         if sessions_report_target.exists():
-            _rewrite_text(sessions_report_target, [("../../work/index.html", "../index.html")])
-            _sync_primary_header(sessions_report_target, "../index.html", "../publication.html", "../assets/logos/cltr.png")
-            _ensure_primary_menu(sessions_report_target)
-            _ensure_hide_index_html(sessions_report_target)
+            _finalize_published_html(sessions_report_target, target_dir, docs_atlas_dir)
         for html_path in (target_dir / "cohort").rglob("*.html"):
-            _rewrite_text(html_path, [("../../work/index.html", "../../../index.html")])
-            _sync_primary_header(html_path, "../../index.html", "../../publication.html", "../../assets/logos/cltr.png")
-            _ensure_primary_menu(html_path)
-            _ensure_hide_index_html(html_path)
+            _finalize_published_html(html_path, target_dir, docs_atlas_dir)
         for html_path in (target_dir / "sessions").rglob("*.html"):
-            _rewrite_text(html_path, [("../../../work/index.html", "../../../../index.html")])
-            _sync_primary_header(html_path, "../../../index.html", "../../../publication.html", "../../../assets/logos/cltr.png")
-            _ensure_primary_menu(html_path)
-            _ensure_hide_index_html(html_path)
+            _finalize_published_html(html_path, target_dir, docs_atlas_dir)
     else:
         sessions_report_target = target_dir / "sessions_report.html"
         if sessions_report_target.exists():
-            _rewrite_text(sessions_report_target, [("../../work/index.html", "../../index.html")])
-            _sync_primary_header(sessions_report_target, "../../index.html", "../../publication.html", "../../assets/logos/cltr.png")
-            _ensure_primary_menu(sessions_report_target)
-            _ensure_hide_index_html(sessions_report_target)
+            _finalize_published_html(sessions_report_target, target_dir, docs_atlas_dir)
         for html_path in (target_dir / "cohort").rglob("*.html"):
-            _rewrite_text(html_path, [("../../work/index.html", "../../index.html")])
-            _sync_primary_header(html_path, "../../index.html", "../../publication.html", "../../assets/logos/cltr.png")
-            _ensure_primary_menu(html_path)
-            _ensure_hide_index_html(html_path)
+            _finalize_published_html(html_path, target_dir, docs_atlas_dir)
         for html_path in (target_dir / "sessions").rglob("*.html"):
-            _rewrite_text(html_path, [("../../../work/index.html", "../../../index.html")])
-            _sync_primary_header(html_path, "../../../index.html", "../../../publication.html", "../../../assets/logos/cltr.png")
-            _ensure_primary_menu(html_path)
-            _ensure_hide_index_html(html_path)
+            _finalize_published_html(html_path, target_dir, docs_atlas_dir)
         docs_atlas_dir.mkdir(parents=True, exist_ok=True)
         (docs_atlas_dir / "index.html").write_text(_redirect_html(f"./{normalized_target}/index.html"), encoding="utf-8")
     return {

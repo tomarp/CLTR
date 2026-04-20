@@ -180,6 +180,7 @@ WORK_HOME_SUBTITLE = "Controlled Laboratory Thermal Response"
 SESSION_CTA = "Open session report"
 COHORT_CTA = "Open cohort report"
 COPYRIGHT_NOTE = "&copy; 2026 Tomar & Elkounni. All rights reserved."
+COHORT_LEGACY_INDEX_FILENAME = "cohort_report.html"
 PROJECT_GITHUB_URL = "https://github.com/tomarp/cltr"
 PROJECT_ZENODO_URL = "https://doi.org/10.5281/zenodo.17817175"
 PROJECT_FRAMEWORK_URL = "https://github.com/tomarp/cltr/tree/main/framework"
@@ -538,14 +539,17 @@ class ReportWriter:
         full_html_path = root / "cohort_full_report.html"
         full_html_path.write_text(self._cohort_html(cohort_inputs, narrative_specs, appendix_specs), encoding="utf-8")
         chapter_specs = self._cohort_chapter_specs(cohort_inputs, narrative_specs, appendix_specs)
+        chapter_route_map = {chapter["slug"]: self._cohort_chapter_route(chapter) for chapter in chapter_specs}
         chapter_menu_items_html = "".join(
-            f"<a href='{html_escape(chapter['filename'])}'>{html_escape(chapter['title'].split(':')[-1].strip())}<span>{html_escape(chapter['subtitle'])}</span></a>"
+            f"<a href='{html_escape(chapter_route_map[chapter['slug']])}'>{html_escape(chapter['title'].split(':')[-1].strip())}<span>{html_escape(chapter['subtitle'])}</span></a>"
             for chapter in chapter_specs
         )
         chapter_paths: dict[str, str] = {}
         for chapter in chapter_specs:
             chapter_path = root / chapter["filename"]
-            chapter_path.write_text(
+            canonical_chapter_dir = ensure_dir(root / chapter_route_map[chapter["slug"]].rstrip("/"))
+            canonical_chapter_path = canonical_chapter_dir / "index.html"
+            canonical_chapter_path.write_text(
                 self._cohort_chapter_html(
                     cohort_inputs,
                     chapter["title"],
@@ -555,12 +559,18 @@ class ReportWriter:
                     chapter["section_intro_map"],
                     chapter_menu_items_html,
                     chapter["chapter_number"],
+                    home_href="../../index.html",
+                    logo_src="../../../../../cltr/docs/assets/logos/cltr.png",
+                    figure_src_prefix="../figures/",
+                    sessions_href="../../sessions_report.html",
                 ),
                 encoding="utf-8",
             )
-            chapter_paths[chapter["slug"]] = str(chapter_path)
-        html_path = root / "cohort_report.html"
+            chapter_path.write_text(self._redirect_html(f"./{chapter_route_map[chapter['slug']]}"), encoding="utf-8")
+            chapter_paths[chapter["slug"]] = str(canonical_chapter_path)
+        html_path = root / "index.html"
         html_path.write_text(self._cohort_index_html(cohort_inputs, chapter_specs, chapter_paths, full_html_path), encoding="utf-8")
+        (root / COHORT_LEGACY_INDEX_FILENAME).write_text(self._redirect_html("./"), encoding="utf-8")
         return {
             "html_path": str(html_path),
             "figure_paths": [str(p) for p in saved],
@@ -620,7 +630,7 @@ body {{ margin:0; min-height:100vh; display:flex; flex-direction:column; font-fa
 .primaryBarInner {{ width:min(100%, {ui['page_max_width']}); margin:0 auto; padding:12px clamp(16px,2.4vw,28px); display:flex; align-items:center; justify-content:space-between; gap:16px; box-sizing:border-box; }}
 .logoLink {{ display:inline-flex; align-items:center; gap:12px; min-height:58px; text-decoration:none; }}
 .logoLink:hover {{ transform:translateY(-1px); }}
-.logoMark {{ width:58px; height:58px; object-fit:contain; display:block; flex-shrink:0; }}
+.logoMark,.logoImage {{ width:58px; height:58px; object-fit:contain; display:block; flex-shrink:0; }}
 .logoWordmark {{ display:inline-flex; align-items:center; height:58px; font:700 2.1rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:-0.04em; color:#172033; }}
 .secondaryBar {{ position:sticky; top:71px; z-index:23; backdrop-filter:blur(14px); background:rgba(255,255,255,0.78); border-bottom:1px solid rgba(148,163,184,0.16); }}
 .secondaryBarInner {{ width:min(100%, {ui['page_max_width']}); margin:0 auto; padding:10px clamp(16px,2.4vw,28px); display:flex; align-items:center; justify-content:space-between; gap:14px; box-sizing:border-box; }}
@@ -633,11 +643,14 @@ body {{ margin:0; min-height:100vh; display:flex; flex-direction:column; font-fa
 .reportKind--atlas .secondaryBarType::before {{ background:#fb7185; box-shadow:0 0 0 3px rgba(251,113,133,0.14); }}
 .reportKind--home .secondaryBarType::before {{ background:#7c3aed; box-shadow:0 0 0 3px rgba(124,58,237,0.14); }}
 .secondaryBarText {{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }}
-.mastheadActions {{ display:flex; align-items:center; gap:12px; flex-shrink:0; }}
-.socialLinks {{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }}
+.mastheadActions {{ display:flex; align-items:center; justify-content:flex-end; gap:12px; flex:1 1 auto; min-width:0; }}
+.menuWrap {{ position:relative; display:flex; align-items:center; }}
+.socialLinks {{ display:flex; align-items:center; justify-content:flex-end; gap:10px; flex-wrap:wrap; min-width:0; }}
 .socialLink {{ display:inline-flex; align-items:center; justify-content:center; min-height:44px; padding:0 16px; border-radius:999px; text-decoration:none; color:#172033; background:linear-gradient(180deg,rgba(255,255,255,0.96) 0%,rgba(255,247,237,0.96) 100%); border:1px solid rgba(251,146,60,0.28); box-shadow:0 12px 28px rgba(23,32,51,0.08); font:700 0.92rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:0.01em; }}
 .socialLink:hover {{ background:#ffffff; border-color:#fb923c; box-shadow:0 16px 34px rgba(23,32,51,0.12); transform:translateY(-1px); }}
 .socialLink.isDisabled {{ pointer-events:none; opacity:0.58; }}
+.menuPanel .socialLinks {{ display:grid; gap:8px; }}
+.menuPanel .socialLink {{ width:100%; min-height:40px; justify-content:flex-start; padding:10px 12px; border-radius:14px; font-size:0.82rem; line-height:1.2; box-sizing:border-box; box-shadow:0 10px 20px rgba(23,32,51,0.12); background:linear-gradient(135deg,rgba(255,255,255,0.98) 0%,rgba(255,243,224,0.98) 52%,rgba(255,232,214,0.98) 100%); border:1px solid rgba(251,146,60,0.34); }}
 .themeToggle {{ appearance:none; width:44px; height:44px; border-radius:999px; border:1px solid rgba(148,163,184,0.24); background:linear-gradient(180deg,rgba(255,255,255,0.96) 0%,rgba(255,247,237,0.96) 100%); color:#172033; box-shadow:0 12px 28px rgba(23,32,51,0.08); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }}
 .themeToggle:hover {{ background:#ffffff; border-color:#fb923c; box-shadow:0 16px 34px rgba(23,32,51,0.12); transform:translateY(-1px); }}
 .themeToggleIconDark,.themeToggleIconLight {{ font-size:1.05rem; line-height:1; }}
@@ -649,19 +662,19 @@ body.theme-dark .logoWordmark,body.theme-dark .secondaryBarType,body.theme-dark 
 body.theme-dark .secondaryBarText,body.theme-dark .label,body.theme-dark .meta,body.theme-dark .figureMeta,body.theme-dark .caption,body.theme-dark .subtitle,body.theme-dark .takeawayText,body.theme-dark td,body.theme-dark .nav a span {{ color:#cbd5e1; }}
 body.theme-dark .panel,body.theme-dark .figurePanel,body.theme-dark .tablePanel,body.theme-dark .card,body.theme-dark .takeawayItem,body.theme-dark .takeawayLead {{ background:rgba(15,23,42,0.88); border-color:rgba(71,85,105,0.38); box-shadow:0 18px 44px rgba(2,6,23,0.38); }}
 body.theme-dark .socialLink,body.theme-dark .themeToggle,body.theme-dark .menuButton {{ color:#f8fafc; background:linear-gradient(180deg,rgba(30,41,59,0.96) 0%,rgba(15,23,42,0.96) 100%); border-color:rgba(71,85,105,0.5); }}
-body.theme-dark .menuPanel {{ background:rgba(15,23,42,0.96); border-color:rgba(71,85,105,0.4); }}
+body.theme-dark .menuPanel .socialLink {{ background:linear-gradient(135deg,rgba(30,41,59,0.98) 0%,rgba(37,99,235,0.34) 58%,rgba(15,23,42,0.98) 100%); border-color:rgba(96,165,250,0.34); box-shadow:0 10px 22px rgba(2,6,23,0.34); }}
 body.theme-dark .nav a {{ color:#f8fafc; background:rgba(30,41,59,0.96); border-color:rgba(71,85,105,0.44); box-shadow:inset 0 0 0 4px rgba(15,23,42,0.75); }}
 body.theme-dark table th {{ background:#1e293b; }}
 body.theme-dark .figureImage,body.theme-dark .lightbox img {{ background:#e2e8f0; }}
 body.theme-dark .themeToggleIconDark {{ display:none; }}
 body.theme-dark .themeToggleIconLight {{ display:inline; }}
-.menuButton {{ appearance:none; border:1px solid rgba(148,163,184,0.28); background:rgba(255,255,255,0.88); color:#172033; border-radius:999px; padding:10px 14px; display:inline-flex; align-items:center; gap:10px; font:600 0.82rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; cursor:pointer; box-shadow:0 10px 24px rgba(23,32,51,0.08); }}
-.menuButton:hover {{ background:#ffffff; border-color:#cbd5e1; }}
+.menuButton {{ appearance:none; border:1px solid rgba(148,163,184,0.28); background:linear-gradient(180deg,rgba(255,255,255,0.96) 0%,rgba(255,247,237,0.96) 100%); color:#172033; border-radius:999px; min-height:44px; padding:0 14px; display:inline-flex; align-items:center; gap:10px; font:700 0.82rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:0.04em; cursor:pointer; box-shadow:0 12px 28px rgba(23,32,51,0.08); }}
+.menuButton:hover {{ background:#ffffff; border-color:#fb923c; box-shadow:0 16px 34px rgba(23,32,51,0.12); transform:translateY(-1px); }}
 .menuButtonBars {{ display:grid; gap:3px; }}
 .menuButtonBars span {{ display:block; width:14px; height:2px; border-radius:999px; background:currentColor; }}
-.menuPanel {{ position:absolute; right:0; top:calc(100% + 10px); width:min(420px, calc(100vw - 32px)); max-height:min(70vh, 720px); overflow:auto; padding:14px 12px; background:rgba(255,255,255,0.97); border:1px solid rgba(148,163,184,0.22); border-radius:{ui['panel_radius']}; box-shadow:0 22px 54px rgba(23,32,51,0.16); backdrop-filter:blur(18px); display:none; }}
+.menuPanel {{ position:absolute; right:0; top:calc(100% + 10px); width:min(220px, calc(100vw - 32px)); padding:0; background:transparent; border:0; border-radius:0; box-shadow:none; backdrop-filter:none; display:none; }}
 .menuPanel.open {{ display:grid; gap:10px; }}
-.menuTitle {{ margin:0 0 2px; font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size:0.78rem; letter-spacing:0.14em; text-transform:uppercase; color:#64748b; }}
+.menuTitle {{ display:none; }}
 .hero {{ display:grid; grid-template-columns:minmax(0,1.2fr) minmax(320px,0.8fr); gap:{ui['hero_gap']}; align-items:end; }}
 .panel,.figurePanel,.tablePanel {{ background:rgba(255,255,255,0.9); border:{ui['panel_border']}; border-radius:{ui['panel_radius']}; box-shadow:{ui['panel_shadow']}; padding:{ui['panel_padding']}; backdrop-filter:blur(8px); }}
 .heroLead,.heroSide {{ position:relative; overflow:hidden; }}
@@ -776,7 +789,9 @@ body.theme-dark .dataTablePanel .tableScroll::-webkit-scrollbar-thumb:hover {{ b
 .copyrightNote {{ width:min(100%, {ui['page_max_width']}); margin:0 auto; padding:0 clamp(16px,2.4vw,28px) 18px; box-sizing:border-box; display:flex; justify-content:center; align-items:center; text-align:center; color:#64748b; font:500 0.84rem/1.5 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }}
 body.theme-dark .copyrightNote {{ color:#94a3b8; }}
 @media (max-width:1280px) {{ .reportShell {{ grid-template-columns:1fr; }} }}
-@media (max-width:{ui['mobile_breakpoint']}) {{ .primaryBarInner,.secondaryBarInner,.hero,.tableGrid,.chapterGrid,.chapterMetaGrid {{ grid-template-columns:1fr; }} .primaryBarInner,.secondaryBarInner {{ display:grid; padding:12px 20px; }} .mastheadActions,.secondaryBarActions {{ justify-content:space-between; }} .secondaryBarText {{ white-space:normal; }} .page {{ padding:20px 16px 40px; }} .nav a {{ grid-template-columns:auto minmax(0,1fr); }} .menuPanel {{ right:auto; left:0; width:min(100%, 420px); }} .takeawayHeader {{ align-items:start; }} .socialLinks {{ order:2; }} .chapterCardHeader,.chapterOpenRow {{ grid-template-columns:1fr; display:grid; }} .figurePanel .dataTablePanel {{ width:100%; margin:6px 0 0; }} .figurePanel .dataTablePanel .tableScroll {{ padding:8px 10px; }} }}
+@media (max-width:{ui['mobile_breakpoint']}) {{ .primaryBarInner,.secondaryBarInner,.hero,.tableGrid,.chapterGrid,.chapterMetaGrid {{ grid-template-columns:1fr; }} .primaryBarInner,.secondaryBarInner {{ display:grid; padding:12px 20px; }} .mastheadActions,.secondaryBarActions {{ justify-content:space-between; }} .secondaryBarText {{ white-space:normal; }} .page {{ padding:20px 16px 40px; }} .nav a {{ grid-template-columns:auto minmax(0,1fr); }} .takeawayHeader {{ align-items:start; }} .chapterCardHeader,.chapterOpenRow {{ grid-template-columns:1fr; display:grid; }} .figurePanel .dataTablePanel {{ width:100%; margin:6px 0 0; }} .figurePanel .dataTablePanel .tableScroll {{ padding:8px 10px; }} }}
+@media (max-width:860px) {{ .primaryBarInner {{ flex-wrap:wrap; padding:12px 20px; }} .mastheadActions {{ width:100%; justify-content:flex-end; }} }}
+@media (max-width:640px) {{ .mastheadActions {{ width:auto; }} .menuPanel {{ right:0; left:auto; width:min(280px, calc(100vw - 24px)); }} .logoMark,.logoImage {{ width:52px; height:52px; }} .logoWordmark {{ height:52px; font-size:1.9rem; }} }}
 """.strip()
 
     def _shared_index_css(self) -> str:
@@ -788,7 +803,7 @@ body {{ margin:0; min-height:100vh; display:flex; flex-direction:column; font-fa
 .primaryBarInner {{ width:min(100%, {ui['page_max_width']}); margin:0 auto; padding:12px 28px; display:flex; align-items:center; justify-content:space-between; gap:16px; box-sizing:border-box; }}
 .logoLink {{ display:inline-flex; align-items:center; gap:12px; min-height:58px; text-decoration:none; }}
 .logoLink:hover {{ transform:translateY(-1px); }}
-.logoMark {{ width:58px; height:58px; object-fit:contain; display:block; flex-shrink:0; }}
+.logoMark,.logoImage {{ width:58px; height:58px; object-fit:contain; display:block; flex-shrink:0; }}
 .logoWordmark {{ display:inline-flex; align-items:center; height:58px; font:700 2.1rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:-0.04em; color:#172033; }}
 .secondaryBar {{ position:sticky; top:71px; z-index:23; backdrop-filter:blur(14px); background:rgba(255,255,255,0.78); border-bottom:1px solid rgba(148,163,184,0.16); }}
 .secondaryBarInner {{ width:min(100%, {ui['page_max_width']}); margin:0 auto; padding:10px 28px; display:flex; align-items:center; justify-content:space-between; gap:14px; box-sizing:border-box; }}
@@ -798,10 +813,12 @@ body {{ margin:0; min-height:100vh; display:flex; flex-direction:column; font-fa
 .secondaryBarType::before {{ content:""; width:8px; height:8px; border-radius:999px; background:#fb7185; box-shadow:0 0 0 3px rgba(251,113,133,0.14); }}
 .reportKind--home .secondaryBarType::before {{ background:#7c3aed; box-shadow:0 0 0 3px rgba(124,58,237,0.14); }}
 .secondaryBarText {{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }}
-.socialLinks {{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }}
+.socialLinks {{ display:flex; align-items:center; justify-content:flex-end; gap:10px; flex-wrap:wrap; min-width:0; }}
 .socialLink {{ display:inline-flex; align-items:center; justify-content:center; min-height:44px; padding:0 16px; border-radius:999px; text-decoration:none; color:#172033; background:linear-gradient(180deg,rgba(255,255,255,0.96) 0%,rgba(255,247,237,0.96) 100%); border:1px solid rgba(251,146,60,0.28); box-shadow:0 12px 28px rgba(23,32,51,0.08); font:700 0.92rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:0.01em; }}
 .socialLink:hover {{ background:#ffffff; border-color:#fb923c; box-shadow:0 16px 34px rgba(23,32,51,0.12); transform:translateY(-1px); }}
 .socialLink.isDisabled {{ pointer-events:none; opacity:0.58; }}
+.menuPanel .socialLinks {{ display:grid; gap:8px; }}
+.menuPanel .socialLink {{ width:100%; min-height:40px; justify-content:flex-start; padding:10px 12px; border-radius:14px; font-size:0.82rem; line-height:1.2; box-sizing:border-box; box-shadow:0 10px 20px rgba(23,32,51,0.12); background:linear-gradient(135deg,rgba(255,255,255,0.98) 0%,rgba(255,243,224,0.98) 52%,rgba(255,232,214,0.98) 100%); border:1px solid rgba(251,146,60,0.34); }}
 .themeToggle {{ appearance:none; width:44px; height:44px; border-radius:999px; border:1px solid rgba(148,163,184,0.24); background:linear-gradient(180deg,rgba(255,255,255,0.96) 0%,rgba(255,247,237,0.96) 100%); color:#172033; box-shadow:0 12px 28px rgba(23,32,51,0.08); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }}
 .themeToggle:hover {{ background:#ffffff; border-color:#fb923c; box-shadow:0 16px 34px rgba(23,32,51,0.12); transform:translateY(-1px); }}
 .themeToggleIconDark,.themeToggleIconLight {{ font-size:1.05rem; line-height:1; }}
@@ -815,18 +832,19 @@ body.theme-dark .panel,body.theme-dark .sessionCard,body.theme-dark .heroFact {{
 body.theme-dark .heroIntro,body.theme-dark .heroCta {{ background:linear-gradient(135deg,#0f172a 0%,#1e293b 52%,#334155 100%); border-color:rgba(71,85,105,0.4); }}
 body.theme-dark .gatewayCard {{ background:linear-gradient(135deg,#0f172a 0%,#1e293b 52%,#334155 100%); border-color:rgba(71,85,105,0.4); }}
 body.theme-dark .socialLink,body.theme-dark .themeToggle,body.theme-dark .menuButton {{ color:#f8fafc; background:linear-gradient(180deg,rgba(30,41,59,0.96) 0%,rgba(15,23,42,0.96) 100%); border-color:rgba(71,85,105,0.5); }}
-body.theme-dark .menuPanel {{ background:rgba(15,23,42,0.96); border-color:rgba(71,85,105,0.4); }}
+body.theme-dark .menuPanel .socialLink {{ background:linear-gradient(135deg,rgba(30,41,59,0.98) 0%,rgba(37,99,235,0.34) 58%,rgba(15,23,42,0.98) 100%); border-color:rgba(96,165,250,0.34); box-shadow:0 10px 22px rgba(2,6,23,0.34); }}
 body.theme-dark .nav a {{ color:#f8fafc; background:rgba(30,41,59,0.96); border-color:rgba(71,85,105,0.44); box-shadow:inset 0 0 0 4px rgba(15,23,42,0.75); }}
 body.theme-dark .themeToggleIconDark {{ display:none; }}
 body.theme-dark .themeToggleIconLight {{ display:inline; }}
-.mastheadActions {{ display:flex; align-items:center; gap:12px; flex-shrink:0; }}
-.menuButton {{ appearance:none; border:1px solid rgba(148,163,184,0.28); background:rgba(255,255,255,0.88); color:#172033; border-radius:999px; padding:10px 14px; display:inline-flex; align-items:center; gap:10px; font:600 0.82rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; cursor:pointer; box-shadow:0 10px 24px rgba(23,32,51,0.08); }}
-.menuButton:hover {{ background:#ffffff; border-color:#cbd5e1; }}
+.mastheadActions {{ display:flex; align-items:center; justify-content:flex-end; gap:12px; flex:1 1 auto; min-width:0; }}
+.menuWrap {{ position:relative; display:flex; align-items:center; }}
+.menuButton {{ appearance:none; border:1px solid rgba(148,163,184,0.28); background:linear-gradient(180deg,rgba(255,255,255,0.96) 0%,rgba(255,247,237,0.96) 100%); color:#172033; border-radius:999px; min-height:44px; padding:0 14px; display:inline-flex; align-items:center; gap:10px; font:700 0.82rem/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing:0.04em; cursor:pointer; box-shadow:0 12px 28px rgba(23,32,51,0.08); }}
+.menuButton:hover {{ background:#ffffff; border-color:#fb923c; box-shadow:0 16px 34px rgba(23,32,51,0.12); transform:translateY(-1px); }}
 .menuButtonBars {{ display:grid; gap:3px; }}
 .menuButtonBars span {{ display:block; width:14px; height:2px; border-radius:999px; background:currentColor; }}
-.menuPanel {{ position:absolute; right:0; top:calc(100% + 10px); width:min(420px, calc(100vw - 32px)); max-height:min(70vh, 720px); overflow:auto; padding:14px 12px; background:rgba(255,255,255,0.97); border:1px solid rgba(148,163,184,0.22); border-radius:{ui['panel_radius']}; box-shadow:0 22px 54px rgba(23,32,51,0.16); backdrop-filter:blur(18px); display:none; }}
+.menuPanel {{ position:absolute; right:0; top:calc(100% + 10px); width:min(220px, calc(100vw - 32px)); padding:0; background:transparent; border:0; border-radius:0; box-shadow:none; backdrop-filter:none; display:none; }}
 .menuPanel.open {{ display:grid; gap:10px; }}
-.menuTitle {{ margin:0 0 2px; font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size:0.78rem; letter-spacing:0.14em; text-transform:uppercase; color:#64748b; }}
+.menuTitle {{ display:none; }}
 .nav {{ display:grid; gap:14px; }}
 .navList {{ display:grid; grid-template-columns:1fr; gap:10px; }}
 .nav a {{ width:100%; min-height:44px; text-decoration:none; color:#172033; background:rgba(255,247,237,0.95); border:1px solid #fed7aa; border-radius:14px; display:grid; grid-template-columns:auto minmax(0,1fr); align-items:start; gap:10px; padding:10px 12px; font-size:0.72rem; font-weight:700; font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height:1.2; box-shadow:inset 0 0 0 4px rgba(255,255,255,0.96); box-sizing:border-box; }}
@@ -885,7 +903,9 @@ body.theme-dark .sessionTone--dim-mor {{ background:linear-gradient(180deg,rgba(
 .heroCta .pillLink {{ background:#f8fafc; color:#172033; }}
 .copyrightNote {{ width:min(100%, {ui['page_max_width']}); margin:0 auto; padding:0 clamp(16px,2.4vw,28px) 18px; box-sizing:border-box; display:flex; justify-content:center; align-items:center; text-align:center; color:#64748b; font:500 0.84rem/1.5 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }}
 body.theme-dark .copyrightNote {{ color:#94a3b8; }}
-@media (max-width:{ui['index_mobile_breakpoint']}) {{ .primaryBarInner,.secondaryBarInner,.hero,.grid,.heroFacts,.gatewayGrid,.gatewayMeta {{ grid-template-columns:1fr; }} .primaryBarInner,.secondaryBarInner {{ display:grid; padding:12px 20px; }} .mastheadActions,.secondaryBarActions {{ justify-content:space-between; }} .secondaryBarText {{ white-space:normal; }} .menuPanel {{ right:auto; left:0; width:min(100%, 420px); }} .heroSticky {{ position:static; }} .socialLinks {{ order:2; }} }}
+@media (max-width:{ui['index_mobile_breakpoint']}) {{ .primaryBarInner,.secondaryBarInner,.hero,.grid,.heroFacts,.gatewayGrid,.gatewayMeta {{ grid-template-columns:1fr; }} .primaryBarInner,.secondaryBarInner {{ display:grid; padding:12px 20px; }} .mastheadActions,.secondaryBarActions {{ justify-content:space-between; }} .secondaryBarText {{ white-space:normal; }} .heroSticky {{ position:static; }} }}
+@media (max-width:860px) {{ .primaryBarInner {{ flex-wrap:wrap; padding:12px 20px; }} .mastheadActions {{ width:100%; justify-content:flex-end; }} }}
+@media (max-width:640px) {{ .mastheadActions {{ width:auto; }} .menuPanel {{ right:0; left:auto; width:min(280px, calc(100vw - 24px)); }} .logoMark,.logoImage {{ width:52px; height:52px; }} .logoWordmark {{ height:52px; font-size:1.9rem; }} }}
 """.strip()
 
     def _social_links_html(self) -> str:
@@ -911,7 +931,7 @@ body.theme-dark .copyrightNote {{ color:#94a3b8; }}
         return f"<div class='socialLinks'>{''.join(items)}</div>"
 
     def _logo_image_html(self, logo_src: str) -> str:
-        return f"<img class='logoMark' src='{html_escape(logo_src)}' alt='CLTR logo'/>"
+        return f"<img class='logoImage' src='{html_escape(logo_src)}' alt='CLTR logo'/>"
 
     def _shared_chrome(
         self,
@@ -953,7 +973,13 @@ body.theme-dark .copyrightNote {{ color:#94a3b8; }}
             f"<div class='primaryBarInner'>"
             f"<a class='logoLink' href='{html_escape(home_href)}' title='Open report index' aria-label='Open report index'>{self._logo_image_html(logo_src)}<span class='logoWordmark'>CLTR</span></a>"
             f"<div class='mastheadActions'>"
-            f"{self._social_links_html()}"
+            f"<div class='menuWrap'>"
+            f"<button class='menuButton' id='siteMenuButton' type='button' aria-expanded='false' aria-controls='siteMenuPanel' aria-label='Open site menu'>"
+            f"<span class='menuButtonBars' aria-hidden='true'><span></span><span></span><span></span></span>"
+            f"<span>Menu</span>"
+            f"</button>"
+            f"<div class='menuPanel' id='siteMenuPanel' role='menu' aria-label='Site navigation'>{self._social_links_html()}</div>"
+            f"</div>"
             f"<button class='themeToggle' id='themeToggle' type='button' aria-label='Toggle dark mode'><span class='themeToggleIconDark' aria-hidden='true'>◐</span><span class='themeToggleIconLight' aria-hidden='true'>◑</span></button>"
             f"</div>"
             f"</div>"
@@ -987,29 +1013,56 @@ body.theme-dark .copyrightNote {{ color:#94a3b8; }}
             f"if({var_prefix}Button&&{var_prefix}Panel){{ {var_prefix}Button.addEventListener('click',(event)=>{{ event.stopPropagation(); toggle{var_prefix.capitalize()}Menu(); }}); {var_prefix}Panel.querySelectorAll('a').forEach(link=>link.addEventListener('click', close{var_prefix.capitalize()}Menu)); document.addEventListener('click',(event)=>{{ if(!{var_prefix}Panel.contains(event.target) && !{var_prefix}Button.contains(event.target)) close{var_prefix.capitalize()}Menu(); }}); document.addEventListener('keydown',(event)=>{{ if(event.key==='Escape') close{var_prefix.capitalize()}Menu(); }}); }}\n"
         )
 
+    def _redirect_html(self, target: str) -> str:
+        safe_target = html_escape(target)
+        return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="refresh" content="0; url={safe_target}">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CLTR Redirect</title>
+</head>
+<body>
+  <p>Redirecting to <a href="{safe_target}">{safe_target}</a>.</p>
+</body>
+</html>
+"""
+
+    def _canonical_cohort_href(self) -> str:
+        return "cohort/index.html"
+
+    def _cohort_chapter_route(self, chapter: dict) -> str:
+        return f"ch{int(chapter['chapter_number']):02d}/index.html"
+
     def _cohort_chapter_menu_items_html(self, prefix: str) -> str:
         chapters = [
-            ("cohort_report.html", "Cohort Report", "Chapter index for the cohort audit and result suite"),
-            ("cohort_ch01_overview_audit.html", "Chapter 1", "Study overview and audit registers"),
-            ("cohort_ch02_subjective_behavioral.html", "Chapter 2", "Subjective and behavioral data"),
-            ("cohort_ch03_physiological.html", "Chapter 3", "Physiological data"),
-            ("cohort_ch04_environmental.html", "Chapter 4", "Environmental data"),
-            ("cohort_ch05_derived_results.html", "Chapter 5", "Derived results and audit registers"),
-            ("cohort_ch06_relationships_validation.html", "Chapter 6", "Relationships and validation"),
+            ("index.html", "Cohort Report", "Chapter index for the cohort audit and result suite"),
+            ("ch01/index.html", "Chapter 1", "Study overview and audit registers"),
+            ("ch02/index.html", "Chapter 2", "Subjective and behavioral data"),
+            ("ch03/index.html", "Chapter 3", "Physiological data"),
+            ("ch04/index.html", "Chapter 4", "Environmental data"),
+            ("ch05/index.html", "Chapter 5", "Derived results and audit registers"),
+            ("ch06/index.html", "Chapter 6", "Relationships and validation"),
             ("cohort_full_report.html", "Full Cohort Report", "Full combined cohort export"),
         ]
         return "".join(
-            f"<a href='{html_escape(prefix + filename)}'>{html_escape(label)}<span>{html_escape(desc)}</span></a>"
-            for filename, label, desc in chapters
+            f"<a href='{html_escape(prefix + route)}'>{html_escape(label)}<span>{html_escape(desc)}</span></a>"
+            for route, label, desc in chapters
         )
 
     def _theme_toggle_script(self) -> str:
         return """const themeToggle=document.getElementById('themeToggle');
+const siteMenuButton=document.getElementById('siteMenuButton');
+const siteMenuPanel=document.getElementById('siteMenuPanel');
 const storedTheme=window.localStorage.getItem('cltr-theme');
 if(storedTheme==='dark'){document.body.classList.add('theme-dark');}
 const syncThemeIcon=()=>{if(themeToggle){themeToggle.setAttribute('aria-pressed', document.body.classList.contains('theme-dark') ? 'true' : 'false');}};
+const closeSiteMenu=()=>{if(!siteMenuPanel||!siteMenuButton)return;siteMenuPanel.classList.remove('open');siteMenuButton.setAttribute('aria-expanded','false');};
+const toggleSiteMenu=()=>{if(!siteMenuPanel||!siteMenuButton)return;const open=siteMenuPanel.classList.toggle('open');siteMenuButton.setAttribute('aria-expanded',open?'true':'false');};
 syncThemeIcon();
-if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classList.toggle('theme-dark');window.localStorage.setItem('cltr-theme', document.body.classList.contains('theme-dark') ? 'dark' : 'light');syncThemeIcon();});}"""
+if(themeToggle){themeToggle.addEventListener('click',()=>{document.body.classList.toggle('theme-dark');window.localStorage.setItem('cltr-theme', document.body.classList.contains('theme-dark') ? 'dark' : 'light');syncThemeIcon();});}
+if(siteMenuButton&&siteMenuPanel){siteMenuButton.addEventListener('click',(event)=>{event.stopPropagation();toggleSiteMenu();});siteMenuPanel.querySelectorAll('a').forEach(link=>link.addEventListener('click',closeSiteMenu));document.addEventListener('click',(event)=>{if(!siteMenuPanel.contains(event.target)&&!siteMenuButton.contains(event.target))closeSiteMenu();});document.addEventListener('keydown',(event)=>{if(event.key==='Escape')closeSiteMenu();});}"""
 
     def _session_card_tone_class(self, condition_code: str) -> str:
         code = str(condition_code or "").strip().upper()
@@ -1044,7 +1097,6 @@ body.theme-dark .copyrightNote {{ color:#94a3b8; }}
 """.strip()
 
     def _home_html(self, manifest: pd.DataFrame, session_reports: list[dict], cohort_report: dict) -> str:
-        cohort_name = Path(cohort_report["html_path"]).name if cohort_report.get("html_path") else "cohort_report.html"
         chrome = self._shared_chrome(
             home_href="index.html",
             logo_src="../../../cltr/docs/assets/logos/cltr.png",
@@ -1056,7 +1108,7 @@ body.theme-dark .copyrightNote {{ color:#94a3b8; }}
             menu_title="CLTR Destinations",
             menu_items_html=(
                 f"<a href='index.html' title='Open atlas'>Atlas<span>Study-wide hub and session index</span></a>"
-                f"<a href='cohort/{html_escape(cohort_name)}' title='Open cohort report'>Cohort<span>Study-wide summary report</span></a>"
+                f"<a href='{html_escape(self._canonical_cohort_href())}' title='Open cohort report'>Cohort<span>Study-wide summary report</span></a>"
                 f"<a href='sessions/{html_escape(session_reports[0]['session_id'])}/{html_escape(Path(session_reports[0]['html_path']).name)}' title='Open first session report'>Sessions<span>Session-level analytical reports</span></a>"
                 if session_reports else f"<a href='index.html' title='Open atlas'>Atlas<span>Study-wide hub</span></a>"
             ),
@@ -8565,6 +8617,10 @@ body.theme-dark .copyrightNote {{ color:#94a3b8; }}
         section_intro_map: dict[str, str],
         chapter_menu_items_html: str,
         chapter_number: int | None = None,
+        home_href: str = "../index.html",
+        logo_src: str = "../../../../cltr/docs/assets/logos/cltr.png",
+        figure_src_prefix: str = "figures/",
+        sessions_href: str = "../sessions_report.html",
     ) -> str:
         return self._html_document(
             title=title,
@@ -8577,11 +8633,14 @@ body.theme-dark .copyrightNote {{ color:#94a3b8; }}
             section_intro_map=section_intro_map,
             chapter_number=chapter_number,
             doc_kind="cohort",
+            home_href=home_href,
+            logo_src=logo_src,
+            figure_src_prefix=figure_src_prefix,
             middle_menu_button_id="sessionMenuButton",
             middle_menu_panel_id="sessionMenuPanel",
             middle_menu_label="Sessions",
             middle_menu_title="Sessions",
-            middle_menu_items_html="<a href='../sessions_report.html'>Sessions Report<span>Dedicated session browser and participant-level reports</span></a>",
+            middle_menu_items_html=f"<a href='{html_escape(sessions_href)}'>Sessions Report<span>Dedicated session browser and participant-level reports</span></a>",
             secondary_menu_button_id="chapterMenuButton",
             secondary_menu_panel_id="chapterMenuPanel",
             secondary_menu_label="Chapters",
@@ -8601,7 +8660,7 @@ body.theme-dark .copyrightNote {{ color:#94a3b8; }}
             for k, v in self._cohort_cards(cohort_inputs)[:6]
         )
         chapter_cards = "".join(
-            f"<a class='chapterLinkCard' href='{html_escape(Path(chapter_paths[chapter['slug']]).name)}'>"
+            f"<a class='chapterLinkCard' href='{html_escape(self._cohort_chapter_route(chapter))}'>"
             "<section class='tablePanel chapterCardPanel'>"
             "<div class='chapterCardHeader'>"
             "<div class='chapterCardTitleGroup'>"
@@ -8625,7 +8684,7 @@ body.theme-dark .copyrightNote {{ color:#94a3b8; }}
             for chapter in chapters
         )
         chapter_menu_items_html = "".join(
-            f"<a href='{html_escape(Path(chapter_paths[chapter['slug']]).name)}'>{html_escape(chapter['title'].split(':')[-1].strip())}<span>{html_escape(chapter['subtitle'])}</span></a>"
+            f"<a href='{html_escape(self._cohort_chapter_route(chapter))}'>{html_escape(chapter['title'].split(':')[-1].strip())}<span>{html_escape(chapter['subtitle'])}</span></a>"
             for chapter in chapters
         )
         masthead = self._shared_chrome(
@@ -8693,7 +8752,6 @@ body.theme-dark .copyrightNote {{ color:#94a3b8; }}
             f"{html_escape(r['session_id'])}<span>{html_escape(r['participant_id'])} | {html_escape(r['condition_code'])}</span></a>"
             for r in records
         )
-        cohort_name = Path(cohort_report["html_path"]).name if cohort_report.get("html_path") else ""
         intro_panel = (
             f"<section class='panel heroLead heroIntro'>"
             f"<div class='eyebrow'>Sessions Report</div>"
@@ -8703,7 +8761,7 @@ body.theme-dark .copyrightNote {{ color:#94a3b8; }}
             f"<p class='heroStatement'>This page is the session-level browsing layer of the CLTR report suite. Use it when you need per-session traces, condition context, and participant-specific evidence.</p>"
             f"<div class='heroFacts'>"
             f"<div class='heroFact'><div class='heroFactLabel'>Coverage</div><div class='heroFactValue'>{len(records)} generated session reports across the full study.</div></div>"
-            f"<div class='heroFact'><div class='heroFactLabel'>Study-wide report</div><div class='heroFactValue'><a class='pillLink' href='cohort/{html_escape(cohort_name)}'>{COHORT_CTA}</a></div></div>"
+            f"<div class='heroFact'><div class='heroFactLabel'>Study-wide report</div><div class='heroFactValue'><a class='pillLink' href='{html_escape(self._canonical_cohort_href())}'>{COHORT_CTA}</a></div></div>"
             f"</div>"
             f"</div>"
             f"</section>"
@@ -8737,7 +8795,6 @@ body.theme-dark .copyrightNote {{ color:#94a3b8; }}
 
     def _atlas_html(self, manifest: pd.DataFrame, session_reports: list[dict], cohort_report: dict, sessions_index_name: str) -> str:
         session_count = len(session_reports)
-        cohort_name = Path(cohort_report["html_path"]).name if cohort_report.get("html_path") else "cohort_report.html"
         masthead = self._shared_chrome(
             home_href="index.html",
             logo_src="../../../cltr/docs/assets/logos/cltr.png",
@@ -8748,7 +8805,7 @@ body.theme-dark .copyrightNote {{ color:#94a3b8; }}
             menu_label="Navigate",
             menu_title="Atlas Destinations",
             menu_items_html=(
-                f"<a href='cohort/{html_escape(cohort_name)}'>Cohort Report<span>Study-wide audit, chapters, and full combined report</span></a>"
+                f"<a href='{html_escape(self._canonical_cohort_href())}'>Cohort Report<span>Study-wide audit, chapters, and full combined report</span></a>"
                 f"<a href='{html_escape(sessions_index_name)}'>Sessions Report<span>Dedicated session browser and participant-level reports</span></a>"
             ),
             show_menu_button=False,
@@ -8768,7 +8825,7 @@ body.theme-dark .copyrightNote {{ color:#94a3b8; }}
             f"</section>"
         )
         cohort_card = (
-            f"<a class='panel gatewayCard heroSticky' href='cohort/{html_escape(cohort_name)}'>"
+            f"<a class='panel gatewayCard heroSticky' href='{html_escape(self._canonical_cohort_href())}'>"
             f"<div class='eyebrow'>Primary Entry</div>"
             f"<div class='title'>Cohort Report</div>"
             f"<p class='subtitle'>Open the study-wide audit, chapter suite, and full combined cohort synthesis.</p>"
@@ -8804,6 +8861,7 @@ body.theme-dark .copyrightNote {{ color:#94a3b8; }}
         intro_sections: str = "",
         section_intro_map: dict[str, str] | None = None,
         chapter_number: int | None = None,
+        figure_src_prefix: str = "figures/",
     ) -> str:
         display_map, section_map, kind_map = self._display_numbering(
             specs,
@@ -8830,6 +8888,7 @@ body.theme-dark .copyrightNote {{ color:#94a3b8; }}
                     spec,
                     display_map.get(spec["stem"], spec["code"]),
                     kind_map.get(spec["stem"], "figure"),
+                    figure_src_prefix=figure_src_prefix,
                 )
                 for spec in section_specs
             )
@@ -8897,6 +8956,9 @@ body.theme-dark .copyrightNote {{ color:#94a3b8; }}
         section_intro_map: dict[str, str] | None = None,
         chapter_number: int | None = None,
         doc_kind: str = "report",
+        home_href: str | None = None,
+        logo_src: str | None = None,
+        figure_src_prefix: str = "figures/",
         hero_actions_html: str = "",
         middle_menu_button_id: str = "",
         middle_menu_panel_id: str = "",
@@ -8928,13 +8990,14 @@ body.theme-dark .copyrightNote {{ color:#94a3b8; }}
             intro_sections=intro_sections,
             section_intro_map=section_intro_map,
             chapter_number=chapter_number,
+            figure_src_prefix=figure_src_prefix,
         )
         plotly_js = f"<script>{get_plotlyjs()}</script>" if any(spec.get("html_fragment") for spec in all_specs) else ""
         badge = "Cohort Report" if str(doc_kind) == "cohort" else "Session Report"
-        home_href = "../index.html" if str(doc_kind) == "cohort" else "../../index.html"
+        home_href = home_href or ("../index.html" if str(doc_kind) == "cohort" else "../../index.html")
         masthead = self._shared_chrome(
             home_href=home_href,
-            logo_src="../../../../cltr/docs/assets/logos/cltr.png" if str(doc_kind) == "cohort" else "../../../../../cltr/docs/assets/logos/cltr.png",
+            logo_src=logo_src or ("../../../../cltr/docs/assets/logos/cltr.png" if str(doc_kind) == "cohort" else "../../../../../cltr/docs/assets/logos/cltr.png"),
             page_type=badge,
             page_meta=title,
             menu_button_id="figureMenuButton",
@@ -9009,9 +9072,9 @@ window.addEventListener('resize', resizePlots); requestAnimationFrame(resizePlot
             return "table"
         return "figure"
 
-    def _spec_subsection(self, spec: dict, display_code: str, display_kind: str) -> str:
+    def _spec_subsection(self, spec: dict, display_code: str, display_kind: str, figure_src_prefix: str = "figures/") -> str:
         section_label = f"{display_kind.title()} {display_code}"
-        return f"<section class='figureSection'><h3 class='figureSectionTitle'>{html_escape(section_label)}</h3>{self._figure_block(spec)}</section>"
+        return f"<section class='figureSection'><h3 class='figureSectionTitle'>{html_escape(section_label)}</h3>{self._figure_block(spec, figure_src_prefix=figure_src_prefix)}</section>"
 
     def _caption_text(self, text: str) -> str:
         cleaned = " ".join(str(text or "").split())
@@ -9082,7 +9145,7 @@ window.addEventListener('resize', resizePlots); requestAnimationFrame(resizePlot
             chunks.append(note_html)
         return " ".join(chunks).strip()
 
-    def _figure_block(self, spec: dict) -> str:
+    def _figure_block(self, spec: dict, figure_src_prefix: str = "figures/") -> str:
         path = Path(spec["path"]).name if spec.get("path") else ""
         meta_parts = [f"Evidence: {spec['evidence_label']} ({int(spec['evidence_score'])})"]
         if spec.get("gating_note"):
@@ -9095,7 +9158,7 @@ window.addEventListener('resize', resizePlots); requestAnimationFrame(resizePlot
                 fragment = re.sub(r"<h3>.*?</h3>", "", fragment, count=1, flags=re.DOTALL)
             media = f"<div class='responsiveFigure'>{fragment}</div>"
         else:
-            media = f"<img class='figureImage' src='figures/{html_escape(path)}' alt='{html_escape(spec['title'])}'/>"
+            media = f"<img class='figureImage' src='{html_escape(figure_src_prefix)}{html_escape(path)}' alt='{html_escape(spec['title'])}'/>"
         caption = self._caption_html(spec.get("summary", ""), spec.get("caption_note", ""), spec.get("panel_notes", []))
         heading = f"<h2>{html_escape(spec['title'])}</h2>"
         return f"<article id='{html_escape(spec['stem'])}' class='{classes}'>{heading}{media}{meta}<p class='caption'>{caption}</p></article>"
