@@ -73,24 +73,17 @@ def _normalize_atlas_home_logo(path: Path) -> None:
         return
     text = path.read_text(encoding="utf-8")
     text = _ensure_logo_image_style(text)
-    anchor_variants = (
-        "<a class='logoLink' href='index.html' title='Open report index' aria-label='Open report index'>",
-        "<a class='logoLink' href='./' title='Open report index' aria-label='Open report index'>",
-    )
     replacement = (
         "<a class='logoLink' href='../index.html' title='Open CLTR homepage' aria-label='Open CLTR homepage'>"
         "<img class='logoImage' src='../assets/logos/cltr.png' alt='CLTR logo'/>"
         "<span class='logoWordmark'>CLTR</span></a>"
     )
-    for anchor in anchor_variants:
-        start = text.find(anchor)
-        if start == -1:
-            continue
+    start = text.find("<a class='logoLink'")
+    if start != -1:
         end = text.find("</a>", start)
         if end != -1:
             end += len("</a>")
             text = text[:start] + replacement + text[end:]
-            break
     path.write_text(text, encoding="utf-8")
 
 
@@ -99,29 +92,17 @@ def _sync_primary_header(path: Path, home_href: str, publication_href: str, logo
         return
     text = path.read_text(encoding="utf-8")
     text = _ensure_logo_image_style(text)
-    anchor_variants = (
-        "<a class='logoLink' href='index.html' title='Open report index' aria-label='Open report index'>",
-        "<a class='logoLink' href='./' title='Open report index' aria-label='Open report index'>",
-        "<a class='logoLink' href='../index.html' title='Open CLTR homepage' aria-label='Open CLTR homepage'>",
-        "<a class='logoLink' href='../../index.html' title='Open report index' aria-label='Open report index'>",
-        "<a class='logoLink' href='../../../index.html' title='Open report index' aria-label='Open report index'>",
-        "<a class='logoLink' href='../../../../index.html' title='Open report index' aria-label='Open report index'>",
-        "<a class='logoLink' href='../../../../index.html' title='Open CLTR homepage' aria-label='Open CLTR homepage'>",
-    )
     replacement = (
         f"<a class='logoLink' href='{home_href}' title='Open CLTR homepage' aria-label='Open CLTR homepage'>"
         f"<img class='logoImage' src='{logo_src}' alt='CLTR logo'/>"
         "<span class='logoWordmark'>CLTR</span></a>"
     )
-    for anchor in anchor_variants:
-        start = text.find(anchor)
-        if start == -1:
-            continue
+    start = text.find("<a class='logoLink'")
+    if start != -1:
         end = text.find("</a>", start)
         if end != -1:
             end += len("</a>")
             text = text[:start] + replacement + text[end:]
-            break
     github_link = (
         "<a class='socialLink' href='https://github.com/tomarp/cltr' title='Open GitHub' "
         "target='_blank' rel='noopener noreferrer'><span>GitHub</span></a>"
