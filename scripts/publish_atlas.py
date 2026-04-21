@@ -497,6 +497,24 @@ def _rewrite_sessions_links(path: Path, target_dir: Path) -> None:
     path.write_text(text, encoding="utf-8")
 
 
+def _rewrite_sessions_tree_relative_links(path: Path, target_dir: Path) -> None:
+    """Fix links inside pages that live under published /sessions/.
+
+    When the sessions browser is moved from /sessions.html to /sessions/index.html,
+    any links like href="sessions/P01.../P01..._report.html" become
+    /sessions/sessions/P01... and break. Inside /sessions/, links should be
+    relative to the current directory: href="P01.../P01..._report.html".
+    """
+    if not path.exists():
+        return
+    sessions_root = target_dir / "sessions"
+    if sessions_root not in path.parents and path != sessions_root / "index.html":
+        return
+    text = path.read_text(encoding="utf-8")
+    text = re.sub(r"((?:href|src)=['\"])sessions/", r"\1", text)
+    path.write_text(text, encoding="utf-8")
+
+
 def _rewrite_cohort_figure_links(path: Path, target_dir: Path) -> None:
     if not path.exists():
         return
@@ -535,6 +553,7 @@ def _finalize_published_html(path: Path, target_dir: Path, docs_atlas_dir: Path)
     _rewrite_work_index_links(path, home_href)
     _rewrite_cohort_links(path, target_dir)
     _rewrite_sessions_links(path, target_dir)
+    _rewrite_sessions_tree_relative_links(path, target_dir)
     if target_dir / "cohort" in path.parents:
         _rewrite_cohort_figure_links(path, target_dir)
     _sync_primary_header(path, home_href, publication_href, logo_src)
