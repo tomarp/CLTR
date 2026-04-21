@@ -19,16 +19,16 @@ COHORT_ROUTE_MAP = {
     "cohort_ch06_relationships_validation.html": "ch06/",
 }
 COHORT_CANONICAL_MAP = {
-    "cohort_ch01_overview_audit.html": "ch01.html",
-    "cohort_ch02_subjective_behavioral.html": "ch02.html",
-    "cohort_ch03_physiological.html": "ch03.html",
-    "cohort_ch04_environmental.html": "ch04.html",
-    "cohort_ch05_derived_results.html": "ch05.html",
-    "cohort_ch06_relationships_validation.html": "ch06.html",
+    "cohort_ch01_overview_audit.html": "ch01",
+    "cohort_ch02_subjective_behavioral.html": "ch02",
+    "cohort_ch03_physiological.html": "ch03",
+    "cohort_ch04_environmental.html": "ch04",
+    "cohort_ch05_derived_results.html": "ch05",
+    "cohort_ch06_relationships_validation.html": "ch06",
 }
 COHORT_LEGACY_INDEX_NAMES = ("cohort_report.html", "cohort.html")
 COHORT_FULL_LEGACY_NAME = "cohort_full_report.html"
-COHORT_FULL_CANONICAL_NAME = "cohort_full.html"
+COHORT_FULL_CANONICAL_DIR = "full"
 
 
 def _redirect_html(target: str) -> str:
@@ -401,23 +401,34 @@ def _canonicalize_cohort_routes(cohort_dir: Path) -> None:
 
     # Publish each chapter once as cohort/ch01.html..ch06.html (flat), and remove legacy
     # duplicates so the published atlas stays clean.
-    for legacy_name, canonical_name in COHORT_CANONICAL_MAP.items():
+    for legacy_name, canonical_dirname in COHORT_CANONICAL_MAP.items():
         legacy_path = cohort_dir / legacy_name
         if not legacy_path.exists():
             continue
-        canonical_path = cohort_dir / canonical_name
+        canonical_dir = cohort_dir / canonical_dirname
+        canonical_dir.mkdir(parents=True, exist_ok=True)
+        canonical_path = canonical_dir / "index.html"
         canonical_path.write_bytes(legacy_path.read_bytes())
         legacy_path.unlink(missing_ok=True)
 
     full_legacy = cohort_dir / COHORT_FULL_LEGACY_NAME
     if full_legacy.exists():
-        (cohort_dir / COHORT_FULL_CANONICAL_NAME).write_bytes(full_legacy.read_bytes())
+        full_dir = cohort_dir / COHORT_FULL_CANONICAL_DIR
+        full_dir.mkdir(parents=True, exist_ok=True)
+        (full_dir / "index.html").write_bytes(full_legacy.read_bytes())
         full_legacy.unlink(missing_ok=True)
+
+    # Remove previously-used flat canonical names if present.
+    for old in ("cohort_full.html", "ch01.html", "ch02.html", "ch03.html", "ch04.html", "ch05.html", "ch06.html"):
+        (cohort_dir / old).unlink(missing_ok=True)
 
     # Remove older directory-based routes (cohort/ch01/index.html etc.) to avoid duplicates.
     for legacy_route in COHORT_ROUTE_MAP.values():
         legacy_route = legacy_route.strip("/")
         if not legacy_route:
+            continue
+        # COHORT_ROUTE_MAP matches our desired directory names; keep them.
+        if legacy_route in set(COHORT_CANONICAL_MAP.values()):
             continue
         shutil.rmtree(cohort_dir / legacy_route, ignore_errors=True)
 
@@ -436,23 +447,23 @@ def _rewrite_cohort_links(path: Path, target_dir: Path) -> None:
         return
     text = path.read_text(encoding="utf-8")
     route_targets: list[tuple[str, str]] = []
-    cohort_index_href = _relative_href(path.parent, target_dir / "cohort" / "index.html")
+    cohort_root = target_dir / "cohort"
+    cohort_index_href = _relative_dir_href(path.parent, cohort_root)
     route_targets.append((r"(?:cohort/cohort_report\.html|cohort/index\.html|cohort/|cohort/cohort\.html)", cohort_index_href))
-    for legacy_name, canonical_name in COHORT_CANONICAL_MAP.items():
-        canonical_path = target_dir / "cohort" / canonical_name
-        canonical_href = _relative_href(path.parent, canonical_path)
-        route_prefix = canonical_name.replace(".html", "")
+    for legacy_name, canonical_dirname in COHORT_CANONICAL_MAP.items():
+        canonical_dir = cohort_root / canonical_dirname
+        canonical_href = _relative_dir_href(path.parent, canonical_dir)
+        route_prefix = canonical_dirname
         route_targets.append(
             (
-                rf"(?:cohort/{re.escape(legacy_name)}|cohort/{re.escape(canonical_name)}|cohort/{re.escape(route_prefix)}/index\.html|cohort/{re.escape(route_prefix)}/)",
+                rf"(?:cohort/{re.escape(legacy_name)}|cohort/{re.escape(route_prefix)}/index\.html|cohort/{re.escape(route_prefix)}/)",
                 canonical_href,
             )
         )
     for pattern, replacement in route_targets:
         text = re.sub(rf"((?:href|src)=['\"]){pattern}(['\"])", rf"\1{replacement}\2", text)
-    for legacy_name, canonical_name in COHORT_CANONICAL_MAP.items():
-        canonical_path = target_dir / "cohort" / canonical_name
-        canonical_href = _relative_href(path.parent, canonical_path)
+    for legacy_name, canonical_dirname in COHORT_CANONICAL_MAP.items():
+        canonical_href = _relative_dir_href(path.parent, cohort_root / canonical_dirname)
         text = re.sub(rf"((?:href|src)=['\"]){re.escape(legacy_name)}(['\"])", rf"\1{canonical_href}\2", text)
         # Also catch values that include a path prefix ending in the legacy filename.
         text = re.sub(
@@ -467,7 +478,7 @@ def _rewrite_cohort_links(path: Path, target_dir: Path) -> None:
             rf"\1{cohort_index_href}\2",
             text,
         )
-    full_href = _relative_href(path.parent, target_dir / "cohort" / COHORT_FULL_CANONICAL_NAME)
+    full_href = _relative_dir_href(path.parent, cohort_root / COHORT_FULL_CANONICAL_DIR)
     text = re.sub(rf"((?:href|src)=['\"]){re.escape(COHORT_FULL_LEGACY_NAME)}(['\"])", rf"\1{full_href}\2", text)
     text = re.sub(
         rf"((?:href|src)=['\"])(?:[^'\"]*/)?{re.escape(COHORT_FULL_LEGACY_NAME)}(['\"])",
@@ -481,7 +492,7 @@ def _rewrite_sessions_links(path: Path, target_dir: Path) -> None:
     if not path.exists():
         return
     text = path.read_text(encoding="utf-8")
-    sessions_href = _relative_href(path.parent, target_dir / "sessions.html")
+    sessions_href = _relative_dir_href(path.parent, target_dir / "sessions")
     text = re.sub(r"((?:href|src)=['\"])(?:\.\./)*(?:sessions_report|sessions)\.html", rf"\1{sessions_href}", text)
     path.write_text(text, encoding="utf-8")
 
@@ -567,7 +578,9 @@ def publish_atlas(results_dir: str | Path, docs_atlas_dir: str | Path, target: s
     ]
     sessions_index_src = next((path for path in sessions_index_candidates if path.exists()), None)
     if sessions_index_src is not None:
-        shutil.copy2(sessions_index_src, target_dir / "sessions.html")
+        sessions_dir = target_dir / "sessions"
+        sessions_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(sessions_index_src, sessions_dir / "index.html")
     (target_dir / "sessions_report.html").unlink(missing_ok=True)
     cohort_target_dir = target_dir / "cohort"
     if cohort_target_dir.exists():
