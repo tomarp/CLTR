@@ -10,6 +10,7 @@ from pathlib import Path
 PUBLISH_DIRS = ("cohort", "sessions")
 COHORT_ROUTE_MAP = {
     "cohort_report.html": "",
+    "cohort.html": "",
     "cohort_ch01_overview_audit.html": "ch01/",
     "cohort_ch02_subjective_behavioral.html": "ch02/",
     "cohort_ch03_physiological.html": "ch03/",
@@ -17,6 +18,17 @@ COHORT_ROUTE_MAP = {
     "cohort_ch05_derived_results.html": "ch05/",
     "cohort_ch06_relationships_validation.html": "ch06/",
 }
+COHORT_CANONICAL_MAP = {
+    "cohort_ch01_overview_audit.html": "ch01.html",
+    "cohort_ch02_subjective_behavioral.html": "ch02.html",
+    "cohort_ch03_physiological.html": "ch03.html",
+    "cohort_ch04_environmental.html": "ch04.html",
+    "cohort_ch05_derived_results.html": "ch05.html",
+    "cohort_ch06_relationships_validation.html": "ch06.html",
+}
+COHORT_LEGACY_INDEX_NAMES = ("cohort_report.html", "cohort.html")
+COHORT_FULL_LEGACY_NAME = "cohort_full_report.html"
+COHORT_FULL_CANONICAL_NAME = "cohort_full.html"
 
 
 def _redirect_html(target: str) -> str:
@@ -332,6 +344,8 @@ def _ensure_primary_menu(path: Path) -> None:
             "const secondaryMenuButtons=[...document.querySelectorAll('.secondaryBarActions .menuButton[aria-controls]')];\n"
             "const closeSecondaryMenus=(exceptPanelId='')=>{secondaryMenuButtons.forEach((button)=>{const panelId=button.getAttribute('aria-controls');const panel=panelId?document.getElementById(panelId):null;if(!panel||panelId===exceptPanelId)return;panel.classList.remove('open');button.setAttribute('aria-expanded','false');});};\n"
             "secondaryMenuButtons.forEach((button)=>{const panelId=button.getAttribute('aria-controls');const panel=panelId?document.getElementById(panelId):null;if(!panel)return;button.addEventListener('click',(event)=>{event.preventDefault();event.stopPropagation();const willOpen=!panel.classList.contains('open');closeSecondaryMenus();if(willOpen){panel.classList.add('open');button.setAttribute('aria-expanded','true');}else{panel.classList.remove('open');button.setAttribute('aria-expanded','false');}});panel.querySelectorAll('a').forEach((link)=>link.addEventListener('click',()=>{closeSecondaryMenus();button.setAttribute('aria-expanded','false');}));});\n"
+            "const hoverCapable=window.matchMedia&&window.matchMedia('(hover: hover) and (pointer: fine)').matches;\n"
+            "if(hoverCapable){let hoverCloseTimer=0;const cancelHoverClose=()=>{if(hoverCloseTimer){clearTimeout(hoverCloseTimer);hoverCloseTimer=0;}};const scheduleHoverClose=()=>{cancelHoverClose();hoverCloseTimer=setTimeout(()=>closeSecondaryMenus(),140);};secondaryMenuButtons.forEach((button)=>{const panelId=button.getAttribute('aria-controls');const panel=panelId?document.getElementById(panelId):null;if(!panel)return;const openOnHover=()=>{cancelHoverClose();closeSecondaryMenus(panelId);panel.classList.add('open');button.setAttribute('aria-expanded','true');};button.addEventListener('mouseenter',openOnHover);button.addEventListener('mouseleave',scheduleHoverClose);panel.addEventListener('mouseenter',cancelHoverClose);panel.addEventListener('mouseleave',scheduleHoverClose);});}\n"
             "document.addEventListener('click',(event)=>{if(!event.target.closest('.secondaryBarActions'))closeSecondaryMenus();},true);\n"
             "document.addEventListener('keydown',(event)=>{if(event.key==='Escape')closeSecondaryMenus();},true);\n"
         )
@@ -377,20 +391,42 @@ def _relative_dir_href(from_dir: Path, to_dir: Path) -> str:
 
 
 def _canonicalize_cohort_routes(cohort_dir: Path) -> None:
-    for legacy_name, route in COHORT_ROUTE_MAP.items():
+    index_target = cohort_dir / "index.html"
+    for legacy_name in COHORT_LEGACY_INDEX_NAMES:
         legacy_path = cohort_dir / legacy_name
-        canonical_dir = cohort_dir / route if route else cohort_dir
-        canonical_path = canonical_dir / "index.html"
-        if legacy_path.exists() and not canonical_path.exists():
-            canonical_dir.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(legacy_path, canonical_path)
+        if legacy_path.exists():
+            if not index_target.exists():
+                index_target.write_bytes(legacy_path.read_bytes())
+            legacy_path.unlink(missing_ok=True)
+
+    # Publish each chapter once as cohort/ch01.html..ch06.html (flat), and remove legacy
+    # duplicates so the published atlas stays clean.
+    for legacy_name, canonical_name in COHORT_CANONICAL_MAP.items():
+        legacy_path = cohort_dir / legacy_name
+        if not legacy_path.exists():
+            continue
+        canonical_path = cohort_dir / canonical_name
+        canonical_path.write_bytes(legacy_path.read_bytes())
+        legacy_path.unlink(missing_ok=True)
+
+    full_legacy = cohort_dir / COHORT_FULL_LEGACY_NAME
+    if full_legacy.exists():
+        (cohort_dir / COHORT_FULL_CANONICAL_NAME).write_bytes(full_legacy.read_bytes())
+        full_legacy.unlink(missing_ok=True)
+
+    # Remove older directory-based routes (cohort/ch01/index.html etc.) to avoid duplicates.
+    for legacy_route in COHORT_ROUTE_MAP.values():
+        legacy_route = legacy_route.strip("/")
+        if not legacy_route:
+            continue
+        shutil.rmtree(cohort_dir / legacy_route, ignore_errors=True)
 
 
 def _rewrite_work_index_links(path: Path, replacement: str) -> None:
     if not path.exists():
         return
     text = path.read_text(encoding="utf-8")
-    updated = re.sub(r"(?:\.\./)+work/index\.html", replacement, text)
+    updated = re.sub(r"(?:\.\./)+(?:work|execution)/index\.html", replacement, text)
     if updated != text:
         path.write_text(updated, encoding="utf-8")
 
@@ -400,19 +436,44 @@ def _rewrite_cohort_links(path: Path, target_dir: Path) -> None:
         return
     text = path.read_text(encoding="utf-8")
     route_targets: list[tuple[str, str]] = []
-    for legacy_name, route in COHORT_ROUTE_MAP.items():
-        canonical_path = (target_dir / "cohort" / route / "index.html") if route else (target_dir / "cohort" / "index.html")
+    cohort_index_href = _relative_href(path.parent, target_dir / "cohort" / "index.html")
+    route_targets.append((r"(?:cohort/cohort_report\.html|cohort/index\.html|cohort/|cohort/cohort\.html)", cohort_index_href))
+    for legacy_name, canonical_name in COHORT_CANONICAL_MAP.items():
+        canonical_path = target_dir / "cohort" / canonical_name
         canonical_href = _relative_href(path.parent, canonical_path)
-        if route:
-            route_targets.append((rf"(?:cohort/{re.escape(legacy_name)}|cohort/{re.escape(route)}index\.html|cohort/{re.escape(route)})", canonical_href))
-        else:
-            route_targets.append((r"(?:cohort/cohort_report\.html|cohort/index\.html|cohort/)", canonical_href))
+        route_prefix = canonical_name.replace(".html", "")
+        route_targets.append(
+            (
+                rf"(?:cohort/{re.escape(legacy_name)}|cohort/{re.escape(canonical_name)}|cohort/{re.escape(route_prefix)}/index\.html|cohort/{re.escape(route_prefix)}/)",
+                canonical_href,
+            )
+        )
     for pattern, replacement in route_targets:
         text = re.sub(rf"((?:href|src)=['\"]){pattern}(['\"])", rf"\1{replacement}\2", text)
-    for legacy_name, route in COHORT_ROUTE_MAP.items():
-        canonical_path = (target_dir / "cohort" / route / "index.html") if route else (target_dir / "cohort" / "index.html")
+    for legacy_name, canonical_name in COHORT_CANONICAL_MAP.items():
+        canonical_path = target_dir / "cohort" / canonical_name
         canonical_href = _relative_href(path.parent, canonical_path)
         text = re.sub(rf"((?:href|src)=['\"]){re.escape(legacy_name)}(['\"])", rf"\1{canonical_href}\2", text)
+        # Also catch values that include a path prefix ending in the legacy filename.
+        text = re.sub(
+            rf"((?:href|src)=['\"])(?:[^'\"]*/)?{re.escape(legacy_name)}(['\"])",
+            rf"\1{canonical_href}\2",
+            text,
+        )
+    for legacy_name in COHORT_LEGACY_INDEX_NAMES:
+        text = re.sub(rf"((?:href|src)=['\"]){re.escape(legacy_name)}(['\"])", rf"\1{cohort_index_href}\2", text)
+        text = re.sub(
+            rf"((?:href|src)=['\"])(?:[^'\"]*/)?{re.escape(legacy_name)}(['\"])",
+            rf"\1{cohort_index_href}\2",
+            text,
+        )
+    full_href = _relative_href(path.parent, target_dir / "cohort" / COHORT_FULL_CANONICAL_NAME)
+    text = re.sub(rf"((?:href|src)=['\"]){re.escape(COHORT_FULL_LEGACY_NAME)}(['\"])", rf"\1{full_href}\2", text)
+    text = re.sub(
+        rf"((?:href|src)=['\"])(?:[^'\"]*/)?{re.escape(COHORT_FULL_LEGACY_NAME)}(['\"])",
+        rf"\1{full_href}\2",
+        text,
+    )
     path.write_text(text, encoding="utf-8")
 
 
@@ -420,8 +481,8 @@ def _rewrite_sessions_links(path: Path, target_dir: Path) -> None:
     if not path.exists():
         return
     text = path.read_text(encoding="utf-8")
-    sessions_href = _relative_href(path.parent, target_dir / "sessions_report.html")
-    text = re.sub(r"((?:href|src)=['\"])(?:\.\./)*sessions_report\.html", rf"\1{sessions_href}", text)
+    sessions_href = _relative_href(path.parent, target_dir / "sessions.html")
+    text = re.sub(r"((?:href|src)=['\"])(?:\.\./)*(?:sessions_report|sessions)\.html", rf"\1{sessions_href}", text)
     path.write_text(text, encoding="utf-8")
 
 
@@ -489,6 +550,7 @@ def publish_atlas(results_dir: str | Path, docs_atlas_dir: str | Path, target: s
             shutil.copytree(src, target_dir / name)
 
     atlas_index_candidates = [
+        reports_dir / "execution" / "index.html",
         reports_dir / "work" / "index.html",
         reports_dir / "index.html",
     ]
@@ -499,9 +561,14 @@ def publish_atlas(results_dir: str | Path, docs_atlas_dir: str | Path, target: s
 
     atlas_index_target = target_dir / "index.html"
     shutil.copy2(atlas_index_src, atlas_index_target)
-    sessions_index_src = reports_dir / "sessions_report.html"
-    if sessions_index_src.exists():
-        shutil.copy2(sessions_index_src, target_dir / "sessions_report.html")
+    sessions_index_candidates = [
+        reports_dir / "sessions.html",
+        reports_dir / "sessions_report.html",
+    ]
+    sessions_index_src = next((path for path in sessions_index_candidates if path.exists()), None)
+    if sessions_index_src is not None:
+        shutil.copy2(sessions_index_src, target_dir / "sessions.html")
+    (target_dir / "sessions_report.html").unlink(missing_ok=True)
     cohort_target_dir = target_dir / "cohort"
     if cohort_target_dir.exists():
         _canonicalize_cohort_routes(cohort_target_dir)
@@ -514,12 +581,13 @@ def publish_atlas(results_dir: str | Path, docs_atlas_dir: str | Path, target: s
     )
     _normalize_atlas_home_logo(atlas_index_target)
     _rewrite_cohort_links(atlas_index_target, target_dir)
+    _rewrite_sessions_links(atlas_index_target, target_dir)
     _sync_primary_header(atlas_index_target, "../index.html", "../publication.html", "../assets/logos/cltr.png")
     _ensure_primary_menu(atlas_index_target)
     _ensure_atlas_footer_style(atlas_index_target)
     _ensure_hide_index_html(atlas_index_target)
     if target_dir == docs_atlas_dir:
-        sessions_report_target = target_dir / "sessions_report.html"
+        sessions_report_target = target_dir / "sessions.html"
         if sessions_report_target.exists():
             _finalize_published_html(sessions_report_target, target_dir, docs_atlas_dir)
         for html_path in (target_dir / "cohort").rglob("*.html"):
@@ -527,7 +595,7 @@ def publish_atlas(results_dir: str | Path, docs_atlas_dir: str | Path, target: s
         for html_path in (target_dir / "sessions").rglob("*.html"):
             _finalize_published_html(html_path, target_dir, docs_atlas_dir)
     else:
-        sessions_report_target = target_dir / "sessions_report.html"
+        sessions_report_target = target_dir / "sessions.html"
         if sessions_report_target.exists():
             _finalize_published_html(sessions_report_target, target_dir, docs_atlas_dir)
         for html_path in (target_dir / "cohort").rglob("*.html"):
